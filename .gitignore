@@ -1,0 +1,16 @@
+# 含 API Key 和个人信息，切勿上传
+config.json
+state.json
+
+# 聊天原文与生成的报告
+raw/
+reports/
+
+# 导出的聊天记录
+*.csv
+QQ聊天记录导出/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
