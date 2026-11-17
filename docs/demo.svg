@@ -35,18 +35,18 @@
     <line x1="500" y1="62" x2="870" y2="62" stroke="#d0d7de"/>
     <text x="500" y="92" font-size="17" font-weight="700">学习群</text>
     <text x="500" y="122" font-size="15" font-weight="700">考试与作业通知</text>
-    <text x="500" y="148" font-size="14"><tspan fill="#d4a017">★★★★</tspan> 物理期中考本周四开始</text>
-    <text x="512" y="170" font-size="12" fill="#57606a">• 各班时间不同，以本班老师通知为准</text>
-    <text x="512" y="190" font-size="12" fill="#57606a">• 📅 2026-11-17 19:16</text>
+    <text x="500" y="148" font-size="14"><tspan fill="#d4a017">★★★★</tspan> 高数期中考试提前一周</text>
+    <text x="512" y="170" font-size="12" fill="#57606a">• 具体时间以本班老师通知为准</text>
+    <text x="512" y="190" font-size="12" fill="#57606a">• 📅 2026-11-17 19:20</text>
     <text x="500" y="222" font-size="15" font-weight="700">学习资料</text>
-    <text x="500" y="248" font-size="14"><tspan fill="#d4a017">★★★★</tspan> 线代历年真题刷题站</text>
+    <text x="500" y="248" font-size="14"><tspan fill="#d4a017">★★★★</tspan> 往年真题合集整理</text>
     <text x="512" y="270" font-size="12" fill="#57606a">• 解释：真题就是往年考过的卷子……</text>
     <text x="512" y="290" font-size="12" fill="#0969da">• 链接：https://...</text>
     <line x1="500" y1="312" x2="870" y2="312" stroke="#d0d7de"/>
     <text x="500" y="340" font-size="17" font-weight="700">技术群</text>
     <text x="500" y="370" font-size="15" font-weight="700">赚钱机会</text>
-    <text x="500" y="396" font-size="14"><tspan fill="#d4a017">★★★★★</tspan> AI 数据评测兼职招募</text>
-    <text x="512" y="418" font-size="12" fill="#57606a">• 报酬 ¥200/小时，截止 11-20</text>
+    <text x="500" y="396" font-size="14"><tspan fill="#d4a017">★★★★★</tspan> 开源项目文档翻译招募</text>
+    <text x="512" y="418" font-size="12" fill="#57606a">• 按字数计酬，截止 11-25</text>
     <text x="512" y="438" font-size="12" fill="#1a7f37">• 我能参加吗：可以，面向在校学生</text>
     <text x="500" y="470" font-size="15" font-weight="700">术语小词典</text>
     <text x="512" y="494" font-size="12" fill="#57606a">• token：AI 处理文字的计费单位……</text>

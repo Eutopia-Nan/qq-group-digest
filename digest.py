@@ -1,6 +1,6 @@
 """
 QQ 群聊 AI 筛选器
-- 读取 qq-chat-exporter 导出的群聊记录（CSV 带昵称，推荐；TXT 也行）
+- 读取用户自行导出的群聊记录文件（CSV / TXT，格式见 README）
 - 只取上次运行之后的新消息，用 DeepSeek 按你的个人需求筛选，输出 Markdown 报告
 
 用法:

@@ -18,6 +18,7 @@
 - [Project Structure](#project-structure)
 - [FAQ](#faq)
 - [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
 - [License](#license)
 
 ## Features
@@ -60,7 +61,7 @@ Copy `config.example.json` to `config.json` and fill in at least these three:
 If `config.json` has a syntax error, the program tells you the line number. The usual causes are a trailing comma, Chinese quotation marks, or an unescaped `\` in a path. Use `/` or `\\` in paths.
 
 ### Step 2: Export chat records
-This project only processes chats that have **already been exported**. It does not fetch messages itself. We recommend the third-party tool [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter) (by Yosooiiii, MIT, not affiliated with this project). Export as **CSV**, which includes sender nicknames.
+This project only processes chats that have **already been exported**. It contains no code for fetching or decrypting chat data. You can use any export tool, for example the third-party [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter) (by Yosooiiii, MIT, not affiliated with this project). If you use it, choose **CSV**, which includes sender nicknames. Please assess the risks of any third-party tool yourself.
 
 - Exports go to `Desktop\QQ聊天记录导出\` by default, with file names like `群_<groupId>_<name>.csv`. The tool picks the newest file for each group by its ID.
 - If you export somewhere else, set `export_dir`.
@@ -174,6 +175,12 @@ Issues and PRs are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first
 3. Commit: `git commit -m 'Add xxx'`
 4. Push: `git push origin feature/xxx`
 5. Open a Pull Request
+
+## Disclaimer
+- This is an independent open-source project. It is not affiliated with, authorized by, or endorsed by Tencent. "QQ" is a trademark of Tencent and is used here only to describe what the tool works with.
+- This project only analyzes chat export files that users produce themselves. It contains no code for fetching, cracking or decrypting QQ data, and does not connect to any QQ protocol.
+- Third-party tools mentioned here are maintained by their own authors. This project is not responsible for their functionality, security or compliance.
+- Only process chats you are entitled to view, and follow applicable laws and platform terms. You are solely responsible for how you use this project.
 
 ## License
 [MIT](LICENSE) © Eutopia
