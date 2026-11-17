@@ -28,7 +28,7 @@
 - 💡 **Plain-language explanations**: each item can carry an explanation of the jargon in it, and the report ends with a glossary. You can change the style or turn it off.
 - 📅 **Daily and weekly digests**: double-click to run. Every item is dated.
 - 💰 **Cheap**: it only processes messages inside the time window you choose and drops images, stickers and empty messages. A day of chat usually costs a few cents of a yuan.
-- 🔌 **Works with many models and formats**: DeepSeek or any OpenAI-compatible API, including a local Ollama. Reads CSV, TXT and the classic QQ Message Manager export.
+- 🔌 **Multiple models and formats**: uses DeepSeek and compatible Chat Completions endpoints, including a local Ollama. Reads CSV, TXT and the classic QQ Message Manager export.
 - 📦 **Zero dependencies**: Python standard library only.
 
 > The prompts and reports are in Chinese, since the tool is built for Chinese-language QQ groups.
@@ -47,6 +47,14 @@ cd qq-group-digest
 ```
 If you don't use git, click **Code → Download ZIP** and unzip it. There is nothing to install.
 
+From the project folder, check the installation with a bundled sample. This command needs no configuration or API key.
+
+```bash
+python digest.py --file examples/study.csv --type study --all --dry-run
+```
+
+The output should show two messages in range and one selected for processing.
+
 ## Usage
 
 ### Step 1: Configure
@@ -63,7 +71,8 @@ If `config.json` has a syntax error, the program tells you the line number. The 
 ### Step 2: Export chat records
 This project only processes chats that have **already been exported**. It contains no code for fetching or decrypting chat data. You can use any export tool, for example the third-party [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter) (by Yosooiiii, MIT, not affiliated with this project). If you use it, choose **CSV**, which includes sender nicknames. Please assess the risks of any third-party tool yourself.
 
-- Exports go to `Desktop\QQ聊天记录导出\` by default, with file names like `群_<groupId>_<name>.csv`. The tool picks the newest file for each group by its ID.
+- The exporter's Windows app is on its [Releases page](https://github.com/Yosooiiii/qq-chat-exporter/releases). Keep QQ running and signed in while exporting.
+- Exports go to `Desktop\QQ聊天记录导出\` by default, with file names like `群_<groupId>_<name>.csv`. The tool picks the newest file for each group within a format and prefers CSV when both formats were exported around the same time.
 - If you export somewhere else, set `export_dir`.
 - Other formats work too. See [Supported formats](#supported-formats).
 
@@ -73,7 +82,7 @@ This project only processes chats that have **already been exported**. It contai
 ```bash
 python digest.py --dry-run
 ```
-It shows how many messages it found for each group, without calling the AI.
+It shows how many messages it found and saves the selected text to `raw/`. A dry run makes no AI calls and leaves progress unchanged.
 
 ### Step 4: Generate a digest
 On Windows, double-click:
@@ -90,11 +99,12 @@ python digest.py --preset weekly
 
 ### CLI options
 ```bash
-python digest.py                     # only messages since the last plain run
+python digest.py                     # unprocessed messages, starting with a 24-hour window on first run
 python digest.py --hours 72          # last 3 days
-python digest.py --dry-run           # count only, no AI call
+python digest.py --dry-run           # save a local preview, no AI call
 python digest.py --group 123456789   # one group only
 python digest.py --file chat.txt --type study   # any chat file
+python digest.py --file chat.csv --encoding gb18030 --dry-run   # GBK/GB18030 export
 python digest.py --all               # whole history (can be expensive)
 ```
 
@@ -103,10 +113,13 @@ All settings live in `config.json`.
 
 | Key | Description | Default |
 |------|------|--------|
-| `deepseek.api_key` | API key. The `DEEPSEEK_API_KEY` env var also works. | none, required |
+| `deepseek.api_key` | Key for the configured endpoint. The official DeepSeek endpoint also accepts `DEEPSEEK_API_KEY`. | usually required for cloud services |
 | `deepseek.base_url` | Any OpenAI-compatible endpoint | `https://api.deepseek.com` |
-| `deepseek.model` | Model name | `deepseek-chat` |
-| `profile` | **Most important.** Who you are and what you need | none, required |
+| `deepseek.model` | Model name. Update older configs that use `deepseek-chat` or `deepseek-reasoner`. | `deepseek-flash` |
+| `deepseek.json_mode` | Request JSON mode from the endpoint. Response validation still runs if disabled. | `true` |
+| `deepseek.chunk_chars` | Character limit per batch in the user prompt. Lower it for smaller-context models. | `40000` |
+| `deepseek.max_tokens` | Maximum output tokens per batch | `4096` |
+| `profile` | Who you are and what you need | none |
 | `explain_style` | How to explain jargon. Set to `""` to turn explanations off. | beginner-friendly |
 | `topics` | Group types, with what to focus on and the categories for each | `study`, `opensource` |
 | `groups` | Groups to process: `id`, `name`, `type` | none, required |
@@ -114,6 +127,11 @@ All settings live in `config.json`.
 | `report_dir` | Where reports go when no preset is used | `reports` |
 | `presets` | Named time windows (`hours`), titles and output folders | `daily` 24h, `weekly` 168h |
 | `open_report` | Open the report automatically when done | `true` |
+| `save_raw` | Keep a plaintext copy during normal runs. A dry run always saves a preview. | `false` |
+
+Built-in topics and presets accept field-level overrides. Add or update individual categories, or use `{}` to clear the built-in categories. A custom preset needs a positive `hours` value unless you provide `--hours` or `--all` on the command line.
+
+The first successful incremental run after upgrading converts `state.json` to track individual messages. It may include some recent messages again because the old format only saved run times. `--hours`, the daily and weekly presets, and `--all` leave incremental progress unchanged.
 
 ### Custom group types
 Add an entry next to the existing ones in `topics`:
@@ -130,7 +148,7 @@ Add an entry next to the existing ones in `topics`:
 Then set a group's `type` to `"job"`. A catch-all "其他有用" (other useful) category is added automatically. Unknown types are caught before any paid API call.
 
 ### Other models
-Change `base_url` and `model`. For a local Ollama, use `"base_url": "http://localhost:11434/v1"` and `"model": "qwen2.5"`. No key is needed, and your data stays on your machine.
+Set `base_url`, `model` and `api_key` for the service you are using. For local Ollama, use `"base_url": "http://localhost:11434/v1"`, a model you have downloaded, and an empty key. If your endpoint does not support `response_format`, set `"json_mode": false` under `deepseek`.
 
 ### Supported formats
 | Format | Example |
@@ -138,7 +156,9 @@ Change `base_url` and `model`. For a local Ollama, use `"base_url": "http://loca
 | CSV (recommended) | Needs a time column (`时间`/`time`/`date`) and a content column (`内容`/`content`/`message`). A sender column (`发送者`/`sender`/`name`) is optional. |
 | One-line TXT | `[2026-11-17 14:03:00] Alice: text`. Chinese or English colon; seconds are optional. |
 | Classic QQ Message Manager TXT | A line `2026-11-17 14:03:00 Alice(123456)`, with the content on the next line |
-| Other plain text | No timestamps, so the whole file is processed. Files over 20,000 characters need `--all` to confirm, so you don't overspend by accident. |
+| Other plain text | Use `--all` to confirm processing the entire file when timestamps cannot be detected. |
+
+CSV supports comma, semicolon and Tab delimiters. Timestamps can be local date-times, ISO 8601 with an offset, or 10/13-digit Unix timestamps. The tool detects UTF-8 and UTF-16 with a BOM. For GBK exports, pass `--encoding gb18030`.
 
 ## Project Structure
 ```
@@ -148,8 +168,8 @@ Change `base_url` and `model`. For a local Ollama, use `"base_url": "http://loca
 ├── 2_今周快报_一周.bat        # weekly digest launcher (Windows)
 ├── docs/                     # images for docs
 ├── reports/                  # generated reports (git-ignored)
-├── raw/                      # text sent to the AI on each run (git-ignored)
-└── state.json                # last-run timestamps (git-ignored)
+├── raw/                      # dry-run previews and optional plaintext copies (git-ignored)
+└── state.json                # incremental progress (git-ignored)
 ```
 
 ## FAQ
@@ -165,7 +185,7 @@ Change `base_url` and `model`. For a local Ollama, use `"base_url": "http://loca
 - Large inputs are split into batches, so an item can appear twice when it spans batches.
 - The AI can miss or misread things. Check exam dates and deadlines against the original messages.
 
-**Privacy**: messages inside the time window are sent to the AI provider you configure. `config.json`, `reports/` and `raw/` are git-ignored.
+The selected chat content, sender names and your profile are sent to the configured AI provider. Git ignores `config.json`, `state.json`, `reports/` and `raw/` by default. Check custom output folders before sharing the repository.
 
 ## Contributing
 Issues and PRs are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.

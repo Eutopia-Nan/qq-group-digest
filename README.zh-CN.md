@@ -35,7 +35,7 @@
 
 ### 环境要求
 - Python >= 3.8（安装时务必勾选 **"Add python.exe to PATH"**）
-- 一个 [DeepSeek API Key](https://platform.deepseek.com)：注册后需要先充值几块钱，在 **API keys** 页面创建 Key，它只显示一次，记得马上复制
+- 生成云端快报需要 [DeepSeek API Key](https://platform.deepseek.com) 或其他兼容服务的 Key。下面的样例试运行无需 Key
 - 导出好的群聊记录（见[第 2 步](#第-2-步导出群聊记录)）
 
 ### 安装
@@ -48,6 +48,14 @@ cd qq-group-digest
 ```
 
 无需安装任何依赖。
+
+想先确认安装是否成功？在解压后的项目文件夹地址栏输入 `cmd` 并回车，然后运行：
+
+```bash
+python digest.py --file examples/study.csv --type study --all --dry-run
+```
+
+终端会显示窗口内 2 条、待处理 1 条。筛选后的示例原文保存在 `raw/`。
 
 ## 使用方法
 
@@ -74,7 +82,8 @@ cd qq-group-digest
 ### 第 2 步：导出群聊记录
 本项目**只处理已经导出的文件**，不包含任何获取、解密聊天记录的功能。你可以用任何能导出聊天记录的工具，例如第三方工具 [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter)（作者 Yosooiiii，MIT 许可，与本项目无关）。用它导出时选 **CSV** 格式，里面带发言人昵称。使用第三方工具前请自行评估其风险。
 
-- 默认导出到 `桌面\QQ聊天记录导出\`，文件名形如 `群_<群号>_<群名>.csv`，本工具会按群号自动找到最新的文件，**不用改名**
+- 该导出器的 Windows 免安装版在[发布页](https://github.com/Yosooiiii/qq-chat-exporter/releases)。选发行附件 `QQChatExporter_v1.0.0.zip` 或更新版本对应的应用压缩包。导出时 QQ 需要运行并登录对应账号
+- 默认导出到 `桌面\QQ聊天记录导出\`，文件名形如 `群_<群号>_<群名>.csv`。程序按群号查找，同格式取修改时间最新的文件。同一批导出中优先用 CSV
 - 导出位置不在桌面的话，在 `config.json` 的 `export_dir` 填上那个文件夹的路径
 - 其他工具导出的文件也可以用，见[支持的聊天记录格式](#支持的聊天记录格式)
 
@@ -85,7 +94,7 @@ cd qq-group-digest
 ```bash
 python digest.py --dry-run
 ```
-它会显示每个群找到多少条消息，但不调用 AI。
+它会显示每个群找到多少条消息，并把待处理原文保存到 `raw/`。试运行不调用 AI，也不更新进度。
 
 ### 第 4 步：生成报告
 双击：
@@ -99,17 +108,18 @@ python digest.py --dry-run
 
 1. 用导出工具重新导出（覆盖旧文件即可）
 2. 双击 `.bat` 生成报告
-3. 看完报告后删除导出的文件，因为它是明文
+3. 需要清理明文时，也检查试运行或启用 `save_raw` 时生成的 `raw/` 副本。报告可能包含聊天摘录
 
 ### 命令行参数
 ```bash
 python digest.py --preset daily      # 今日快报（同双击 1）
 python digest.py --preset weekly     # 今周快报（同双击 2）
-python digest.py                     # 只处理上次（不带参数）运行之后的新消息
+python digest.py                     # 增量处理尚未生成快报的消息，首次回看 24 小时
 python digest.py --hours 72          # 最近 3 天
-python digest.py --dry-run           # 只统计、不调用 AI（不花钱）
+python digest.py --dry-run           # 预览并保存原文，不调用 AI
 python digest.py --group 123456789   # 只处理一个群
 python digest.py --file 文件.txt --type study   # 处理任意一个聊天记录文件
+python digest.py --file 文件.csv --encoding gb18030 --dry-run   # 预览 GBK / GB18030 导出
 python digest.py --all               # 处理全部历史记录（很费钱，慎用）
 ```
 
@@ -118,10 +128,13 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `deepseek.api_key` | AI 接口的 Key（也可以用环境变量 `DEEPSEEK_API_KEY`） | 无，必填 |
+| `deepseek.api_key` | 当前 AI 接口的 Key。官方 DeepSeek 地址也可用 `DEEPSEEK_API_KEY` | 云端服务通常需要 |
 | `deepseek.base_url` | AI 接口地址，任何 OpenAI 兼容接口都可以 | `https://api.deepseek.com` |
-| `deepseek.model` | 模型名 | `deepseek-chat` |
-| `profile` | **最重要**。你的身份、能力和需求，AI 靠它判断什么对你有用 | 无，必填 |
+| `deepseek.model` | 模型名，旧配置中的 `deepseek-chat` 和 `deepseek-reasoner` 需更新 | `deepseek-flash` |
+| `deepseek.json_mode` | 是否要求接口启用 JSON 模式。关闭后仍校验返回的 JSON | `true` |
+| `deepseek.chunk_chars` | 每批用户消息的字符上限。用小上下文模型时可以调低 | `40000` |
+| `deepseek.max_tokens` | 每批模型输出的 token 上限 | `4096` |
+| `profile` | 你的身份、能力和需求，帮助模型判断什么对你有用 | 无 |
 | `explain_style` | 术语解释的风格。留空 `""` 就不解释 | 零基础，大白话 + 生活类比 |
 | `topics` | 群类型，以及每类群的关注点和分类（见下文） | `study`、`opensource` |
 | `groups` | 要筛选的群：`id` 群号、`name` 群名、`type` 群类型 | 无，必填 |
@@ -129,6 +142,11 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 | `report_dir` | 不用预设时报告的保存位置 | `reports` |
 | `presets` | 预设的时间范围（`hours`）、标题和保存位置 | `daily` 24 小时、`weekly` 168 小时 |
 | `open_report` | 运行完是否自动打开报告 | `true` |
+| `save_raw` | 正式运行时是否保留筛选后的明文。试运行始终保留预览 | `false` |
+
+内置群类型和预设可按字段覆盖。修改分类时可以只填新增或修改的分类，设为 `{}` 可清除内置分类。自定义预设需填正数 `hours`，也可以在命令行用 `--hours` 或 `--all` 指定范围。
+
+升级后，旧 `state.json` 会在首次成功生成增量报告时转为消息级记录。旧版只保存运行时间，升级后的首次增量可能再次收录部分近期消息。`--hours`、`--preset daily`、`--preset weekly` 和 `--all` 不更新增量进度。
 
 ### 自定义群类型
 在 `topics` **原有的大括号里面**加一项，和 `study`、`opensource` 并列（前一项末尾要补逗号）：
@@ -155,7 +173,7 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 - 正在使用的类型不要删；类型不存在时，程序会在调用 AI 之前就报错，不会白花钱
 
 ### 换成其他 AI
-修改 `base_url` 和 `model` 即可。例如用本地的 Ollama：`"base_url": "http://localhost:11434/v1"`，`"model": "qwen2.5"`，`api_key` 可以不填。数据不出本机，隐私更好。
+把 `base_url`、`model` 和 `api_key` 改为当前服务的配置。使用本机 Ollama 时可填 `"base_url": "http://localhost:11434/v1"` 和已下载的模型名，如 `"model": "qwen2.5"`，并清空 `api_key`。接口不支持 `response_format` 时，在 `deepseek` 里设 `"json_mode": false`。
 
 ### 支持的聊天记录格式
 | 格式 | 示例 |
@@ -163,7 +181,9 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 | CSV（推荐） | 表头包含时间列（`时间`/`日期`/`time`/`date`）和内容列（`内容`/`消息`/`content`/`message`），发送者列（`发送者`/`昵称`/`sender`/`name`）可选 |
 | 单行 TXT | `[2026-11-17 14:03:00] 张三: 内容`（冒号中英文都可以，秒可以省略） |
 | 经典版 QQ 消息管理器 TXT | 一行 `2026-11-17 14:03:00 张三(123456)`，下一行是内容 |
-| 其他纯文本 | 识别不出时间，只能整份处理。超过 2 万字时需要加 `--all` 确认，防止误花钱 |
+| 其他纯文本 | 无法按时间筛选时，使用 `--all` 确认处理整份文件 |
+
+CSV 支持逗号、分号和 Tab 分隔。时间可用本地日期和时间、带时区的 ISO 8601 或 10/13 位时间戳。默认识别 UTF-8 和带 BOM 的 UTF-16，GBK 导出可指定 `--encoding gb18030`。
 
 ## 项目结构
 ```
@@ -173,8 +193,8 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 ├── 2_今周快报_一周.bat        # 双击生成今周快报
 ├── docs/                     # 文档图片
 ├── reports/                  # 生成的报告（运行后出现，不上传）
-├── raw/                      # 每次交给 AI 的原文（运行后出现，不上传）
-└── state.json                # 记录上次运行时间（运行后出现，不上传）
+├── raw/                      # 试运行或显式开启时保留的原文（Git 默认忽略）
+└── state.json                # 增量处理进度（Git 默认忽略）
 ```
 
 ## 常见问题
@@ -186,14 +206,14 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 | `可能需要先重新导出` | 导出文件里没有这段时间的消息，先重新导出 |
 | `401` / `402` | API Key 填错了 / 账户余额不足 |
 | 报告里写"没有筛出有用信息" | 有新消息，但 AI 判断都是闲聊。可以把 `profile` 和 `categories` 写得更具体 |
-| `所有群都没有新消息，未生成报告` | 时间范围内没有消息。换成 `--hours 72` 试试，或者先重新导出 |
+| `没有待处理的文本消息` | 窗口内没有可处理文本，或增量模式已经处理过这些消息。可先重新导出或试用 `--hours 72` |
 
 **已知限制**
 - 消息很多时会分批交给 AI，不同批次之间可能出现重复条目
 - `.bat` 只适用于 Windows；macOS/Linux 用 `python3 digest.py --preset daily`
 - AI 可能看漏或理解错，考试时间、截止日期等重要信息请以原消息为准
 
-**隐私**：时间范围内的聊天内容会发送给你配置的 AI 服务商。`config.json`、`reports/`、`raw/` 已写入 `.gitignore`，不会被上传。
+聊天记录、发送者和你的画像会发给配置的 AI 服务商。Git 默认忽略 `config.json`、`state.json`、`reports/` 和 `raw/`。如果自定义报告目录，分享仓库前也请检查该目录。
 
 ## 贡献
 欢迎提交 Issue 和 PR！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。

@@ -2,7 +2,10 @@
   "deepseek": {
     "api_key": "sk-xxx（在 platform.deepseek.com 获取，或改用环境变量 DEEPSEEK_API_KEY）",
     "base_url": "https://api.deepseek.com",
-    "model": "deepseek-chat"
+    "model": "deepseek-flash",
+    "json_mode": true,
+    "chunk_chars": 40000,
+    "max_tokens": 4096
   },
 
   "profile": "【必填】写你的情况，AI 据此判断什么对你有用、你能不能参加某个机会。例如：计算机专业大二学生，会 Python，想找暑期实习和线上兼职，关注大模型动态，期末想提高高数成绩。",
@@ -44,5 +47,6 @@
     "daily": { "hours": 24, "title": "今日快报", "report_dir": "reports/今日快报" },
     "weekly": { "hours": 168, "title": "今周快报", "report_dir": "reports/今周快报" }
   },
-  "open_report": true
+  "open_report": true,
+  "save_raw": false
 }
