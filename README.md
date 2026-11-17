@@ -1,188 +1,181 @@
 # qq-group-digest
 
-**用 AI 从 QQ 群聊记录里筛出对你有用的信息**，生成每日/每周快报。
+**English** | [简体中文](README.zh-CN.md)
 
-群里每天几百上千条消息，真正有用的可能只有几条：考试通知、学习资料、兼职机会、新模型发布……这个工具读取你导出的群聊记录，按你的个人情况交给 AI（默认 DeepSeek）筛选，输出一份分好类、标好重要度的报告。
+> Use AI to pick out what actually matters to you from QQ group chats, and get a daily or weekly digest.
 
-## 功能
-- **筛选偏好完全由你决定**：关注哪些群、每个群筛哪些分类、你的身份和需求、要不要解释术语，都在配置文件里填写，不用改代码
-- **开箱即用的两套默认分类**
-  - `study` 学习群：考试与作业通知、提分方法、学习资料、竞赛与加分
-  - `opensource` 技术/开源群：赚钱机会、AI 新动态、模型讨论、开源知识
-- **判断你能不能参加**：遇到兼职、招募、竞赛这类机会，会根据你的情况判断你是否符合门槛
-- **术语解释**：可以给每条信息附上通俗解释，报告末尾还有术语小词典。风格可以自定义，也可以关掉
-- **每日 / 每周快报**：双击就能运行，每条信息都标注日期
-- **省钱**：只处理指定时间范围内的消息，自动过滤图片、表情等空消息。一天的群聊处理一次通常只要几分钱
-- **只用 Python 标准库**，无需安装任何依赖
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-green)
+![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
-## 报告示例
-```markdown
-## 某某学习群
-*11-16 22:29 ~ 11-17 22:29，共 472 条消息*
+![demo](docs/demo.svg)
 
-### 学习资料
-#### ★★★★ 线代历年真题在线刷题站
-群友整理了 09-23 年共 22 套真题，支持抽题和错题重刷。
-- **解释**：真题就是往年考过的卷子……
-- 链接：https://...
-- 📅 2026-11-17 17:16
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Project Structure](#project-structure)
+- [FAQ](#faq)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+- 🎯 **You decide what to collect**: which groups to read, which categories to sort messages into, and who you are and what you need. All of it lives in a config file, so you never touch the code.
+- 📚 **Two category sets out of the box**: study groups (exam notices, study tips, materials, competitions) and tech groups (paid gigs, AI news, model discussions, open-source tips).
+- ✅ **"Can I join?" check**: for gigs, recruitments and competitions, it judges whether you meet the requirements based on your profile.
+- 💡 **Plain-language explanations**: each item can carry an explanation of the jargon in it, and the report ends with a glossary. You can change the style or turn it off.
+- 📅 **Daily and weekly digests**: double-click to run. Every item is dated.
+- 💰 **Cheap**: it only processes messages inside the time window you choose and drops images, stickers and empty messages. A day of chat usually costs a few cents of a yuan.
+- 🔌 **Works with many models and formats**: DeepSeek or any OpenAI-compatible API, including a local Ollama. Reads CSV, TXT and the classic QQ Message Manager export.
+- 📦 **Zero dependencies**: Python standard library only.
+
+> The prompts and reports are in Chinese, since the tool is built for Chinese-language QQ groups.
+
+## Quick Start
+
+### Requirements
+- Python >= 3.8. On Windows, tick **"Add python.exe to PATH"** in the installer.
+- A [DeepSeek API key](https://platform.deepseek.com). Top up a small balance first, then create a key under **API keys**. It is shown only once, so copy it right away.
+- Exported group chat records. See [Step 2](#step-2-export-chat-records).
+
+### Installation
+```bash
+git clone https://github.com/Eutopia-Nan/qq-group-digest.git
+cd qq-group-digest
 ```
+If you don't use git, click **Code → Download ZIP** and unzip it. There is nothing to install.
 
----
+## Usage
 
-## 第一次使用
+### Step 1: Configure
+Copy `config.example.json` to `config.json` and fill in at least these three:
 
-### 第 1 步：安装 Python
-到 https://www.python.org/downloads/ 下载安装（3.8 或更新版本）。
-> ⚠️ 安装界面最下方的 **"Add python.exe to PATH"** 一定要勾选。
-
-### 第 2 步：下载本项目
-在本页面点绿色的 **Code** 按钮 → **Download ZIP**，然后解压到一个好找的位置，比如 `D:\qq-group-digest`。
-
-（会用 git 的话也可以 `git clone` 这个仓库。）
-
-### 第 3 步：获取 AI 的 API Key
-1. 打开 https://platform.deepseek.com 注册登录
-2. 先**充值**几块钱（不充值调用会失败，几块钱够用很久）
-3. 左侧进入 **API keys** → 创建一个 Key，**立刻复制保存**（它只显示一次）
-
-### 第 4 步：创建并填写配置文件
-1. 在项目文件夹里，复制 `config.example.json`，把副本**重命名为 `config.json`**
-   > Windows 默认隐藏文件扩展名，改名时容易变成 `config.json.json`。建议先在资源管理器顶部点 **查看 → 显示 → 文件扩展名** 把它打开。
-2. 用**记事本**或 VS Code 打开 `config.json`，至少改这三处：
-
-| 要改的地方 | 怎么填 |
+| Field | What to enter |
 |---|---|
-| `"api_key": "sk-xxx（...）"` | 把引号里的**整段内容**换成你的 Key，例如 `"api_key": "sk-abc123..."` |
-| `"profile": "【必填】..."` | 把引号里的内容换成你自己的情况，越具体筛得越准 |
-| `"groups"` | 改成你要筛选的群：`id` 填群号，`name` 填群名（随意），`type` 填 `study` 或 `opensource` |
+| `deepseek.api_key` | Your API key. Replace the whole placeholder string. |
+| `profile` | Who you are and what you need. The more specific, the better the filtering. |
+| `groups` | `id` is the group number, `name` is any label you like, `type` is `study` or `opensource`. |
 
-**群号在哪看**：QQ 里打开群聊 → 右上角"群聊设置"，群名称下面那串数字就是群号；导出的文件名 `群_<群号>_群名.csv` 里也有。
+If `config.json` has a syntax error, the program tells you the line number. The usual causes are a trailing comma, Chinese quotation marks, or an unescaped `\` in a path. Use `/` or `\\` in paths.
 
-**编辑时注意（写错了程序会提示第几行出错）**
-- 只改**引号里面**的内容，引号本身要保留
-- 用英文标点：英文双引号 `"`、英文逗号 `,`、英文冒号 `:`
-- 列表中每两项之间要有逗号，**最后一项后面不能有逗号**
-- 内容里不要再出现英文双引号，需要的话用中文引号「」代替
-- 写路径时，`\` 要写成 `\\` 或 `/`，例如 `"D:/QQ导出"`
+### Step 2: Export chat records
+This project only processes chats that have **already been exported**. It does not fetch messages itself. We recommend the third-party tool [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter) (by Yosooiiii, MIT, not affiliated with this project). Export as **CSV**, which includes sender nicknames.
 
-### 第 5 步：导出群聊记录
-本项目**不负责**获取聊天记录，只处理已经导出的文件。推荐用第三方工具 [qq-chat-exporter](https://github.com/Yosooiiii/qq-chat-exporter)（作者 Yosooiiii，MIT 许可，与本项目无关），按它的说明把群聊导出为 **CSV**（带发言人昵称；TXT 也支持）。
+- Exports go to `Desktop\QQ聊天记录导出\` by default, with file names like `群_<groupId>_<name>.csv`. The tool picks the newest file for each group by its ID.
+- If you export somewhere else, set `export_dir`.
+- Other formats work too. See [Supported formats](#supported-formats).
 
-- 导出的文件默认在 `桌面\QQ聊天记录导出\`，文件名形如 `群_<群号>_<群名>.csv`。本工具会按群号自动找到最新的文件，**不用改名**
-- 导出位置不是桌面的话，在 `config.json` 的 `export_dir` 填上那个文件夹的路径
-- 也可以用其他工具导出的文件，见下面的[支持的聊天记录格式](#支持的聊天记录格式)
+> Only export chats from your own account that you are entitled to view, and follow applicable laws and platform terms.
 
-> 请仅导出你本人账号、你有权查看的聊天记录，并遵守相关法律法规和平台协议。
-
-### 第 6 步：先试运行（不花钱）
-在项目文件夹的地址栏输入 `cmd` 回车，打开命令行，然后输入：
-```
+### Step 3: Dry run (free)
+```bash
 python digest.py --dry-run
 ```
-它会显示每个群找到了多少条消息，但不调用 AI。确认没问题后进行下一步。
+It shows how many messages it found for each group, without calling the AI.
 
-### 第 7 步：生成报告
-双击项目文件夹里的：
-- `1_今日快报_24小时.bat`：最近 24 小时，报告存到 `reports\今日快报\`
-- `2_今周快报_一周.bat`：最近 7 天，报告存到 `reports\今周快报\`
+### Step 4: Generate a digest
+On Windows, double-click:
+- `1_今日快报_24小时.bat` for the last 24 hours. Saved to `reports/今日快报/`.
+- `2_今周快报_一周.bat` for the last 7 days. Saved to `reports/今周快报/`.
 
-运行完报告会自动打开。报告是 `.md` 文件，用记事本也能看；用 VS Code、Typora 或 Obsidian 打开排版更好看。如果弹出"你要如何打开此文件"，选记事本即可。不想自动打开的话，把 `open_report` 改成 `false`。
-
----
-
-## 日常使用
-
-**每次都要先重新导出，再运行。** 本工具只读取导出好的文件，不会自己去 QQ 里拿新消息。所以流程是：
-
-1. 用导出工具把群聊**重新导出**一次（覆盖旧文件即可）
-2. 双击 `1_今日快报_24小时.bat` 或 `2_今周快报_一周.bat`
-3. 看报告。导出的聊天记录是明文，看完建议删除
-
-### 命令行用法（可选）
-```
-python digest.py --preset daily      # 今日快报（同双击 1）
-python digest.py --preset weekly     # 今周快报（同双击 2）
-python digest.py                     # 只处理上次（不带参数）运行之后的新消息
-python digest.py --hours 72          # 最近 3 天
-python digest.py --dry-run           # 只统计、不调用 AI（不花钱）
-python digest.py --group 123456789   # 只处理一个群
-python digest.py --file 文件.txt --type study    # 处理任意一个聊天记录文件
-python digest.py --all               # 处理文件里的全部历史记录（很费钱，慎用）
+On any OS you can also run:
+```bash
+python digest.py --preset daily
+python digest.py --preset weekly
 ```
 
----
+**Re-export before every run.** The tool only reads exported files and never pulls new messages from QQ by itself.
 
-## 设置筛选偏好
-都在 `config.json` 里设置：
+### CLI options
+```bash
+python digest.py                     # only messages since the last plain run
+python digest.py --hours 72          # last 3 days
+python digest.py --dry-run           # count only, no AI call
+python digest.py --group 123456789   # one group only
+python digest.py --file chat.txt --type study   # any chat file
+python digest.py --all               # whole history (can be expensive)
+```
 
-| 字段 | 作用 |
-|---|---|
-| `profile` | **最重要**。你的身份、能力和需求，例如"大二计算机学生，想找实习，关注大模型"。AI 靠它判断哪些信息对你有用、你能不能参加某个机会 |
-| `topics` | 群类型。每种类型包含 `label`（群的描述）、`focus`（这类群里你最关心什么）和 `categories`（分类名 → 这个分类收集什么） |
-| `groups` | 你要筛选的群。`type` 填 `topics` 里的某个类型名 |
-| `explain_style` | 术语解释的风格，例如"用户是零基础，用大白话 + 生活类比"或"用户有编程基础，简要说明即可"。**留空 `""` 就不解释** |
+## Configuration
+All settings live in `config.json`.
 
-### 示例：新增一个"求职群"类型
-在 `topics` **原有的大括号里面**加一项，和 `study`、`opensource` 并列（注意前一项末尾要补一个逗号）：
+| Key | Description | Default |
+|------|------|--------|
+| `deepseek.api_key` | API key. The `DEEPSEEK_API_KEY` env var also works. | none, required |
+| `deepseek.base_url` | Any OpenAI-compatible endpoint | `https://api.deepseek.com` |
+| `deepseek.model` | Model name | `deepseek-chat` |
+| `profile` | **Most important.** Who you are and what you need | none, required |
+| `explain_style` | How to explain jargon. Set to `""` to turn explanations off. | beginner-friendly |
+| `topics` | Group types, with what to focus on and the categories for each | `study`, `opensource` |
+| `groups` | Groups to process: `id`, `name`, `type` | none, required |
+| `export_dir` | Folder that holds the exported files | `Desktop/QQ聊天记录导出` |
+| `report_dir` | Where reports go when no preset is used | `reports` |
+| `presets` | Named time windows (`hours`), titles and output folders | `daily` 24h, `weekly` 168h |
+| `open_report` | Open the report automatically when done | `true` |
+
+### Custom group types
+Add an entry next to the existing ones in `topics`:
 ```json
-"topics": {
-  "study": { ...原来的内容，不要删... },
-  "opensource": { ...原来的内容，不要删... },
-  "job": {
-    "label": "求职交流群",
-    "focus": "招聘、内推和求职经验",
-    "categories": {
-      "内推机会": "公司、岗位、要求、截止时间、内推码或联系方式",
-      "面经": "面试题目、流程、薪资信息",
-      "求职技巧": "简历、笔试、谈薪等经验"
-    }
+"job": {
+  "label": "求职交流群",
+  "focus": "招聘、内推和求职经验",
+  "categories": {
+    "内推机会": "公司、岗位、要求、截止时间、内推码或联系方式",
+    "面经": "面试题目、流程、薪资信息"
   }
-},
+}
 ```
-然后在 `groups` 里把对应群的 `type` 写成 `"job"`。
+Then set a group's `type` to `"job"`. A catch-all "其他有用" (other useful) category is added automatically. Unknown types are caught before any paid API call.
 
-- 正在使用的类型不要删。程序在调用 AI 之前会检查，类型不存在时会直接提示，不会白花钱
-- 不需要写"其他有用"分类，程序会自动补上，用来收纳有价值但不属于任何分类的信息
+### Other models
+Change `base_url` and `model`. For a local Ollama, use `"base_url": "http://localhost:11434/v1"` and `"model": "qwen2.5"`. No key is needed, and your data stays on your machine.
 
-### 其他设置
-- **时间范围和输出位置**：`presets` 里的 `hours`（小时数）和 `report_dir`
-- **换成其他 AI**：任何 OpenAI 兼容接口都可以，修改 `deepseek` 里的 `base_url` 和 `model`。比如本地的 Ollama 填 `"base_url": "http://localhost:11434/v1"`、`"model": "qwen2.5"`，`api_key` 可以不填
-- **输出格式和通用筛选规则**：修改 `digest.py` 里的 `build_system_prompt`
-
----
-
-## 支持的聊天记录格式
-| 格式 | 示例 |
+### Supported formats
+| Format | Example |
 |---|---|
-| CSV（推荐） | 表头包含时间列（`时间`/`日期`/`time`/`date`）和内容列（`内容`/`消息`/`content`/`message`），发送者列（`发送者`/`昵称`/`sender`/`name`）可选 |
-| 单行 TXT | `[2026-11-17 14:03:00] 张三: 内容`（冒号中英文都可以，秒可省略） |
-| 经典版 QQ 消息管理器 TXT | 一行 `2026-11-17 14:03:00 张三(123456)`，下一行是内容 |
-| 其他纯文本 | 识别不出时间，只能整份交给 AI 处理。文件较大（超过 2 万字）时，需要加 `--all` 确认，防止误花钱 |
+| CSV (recommended) | Needs a time column (`时间`/`time`/`date`) and a content column (`内容`/`content`/`message`). A sender column (`发送者`/`sender`/`name`) is optional. |
+| One-line TXT | `[2026-11-17 14:03:00] Alice: text`. Chinese or English colon; seconds are optional. |
+| Classic QQ Message Manager TXT | A line `2026-11-17 14:03:00 Alice(123456)`, with the content on the next line |
+| Other plain text | No timestamps, so the whole file is processed. Files over 20,000 characters need `--all` to confirm, so you don't overspend by accident. |
 
-## 常见问题
-| 看到的提示 | 原因和解决方法 |
+## Project Structure
+```
+├── digest.py                 # main program
+├── config.example.json       # config template (copy to config.json)
+├── 1_今日快报_24小时.bat      # daily digest launcher (Windows)
+├── 2_今周快报_一周.bat        # weekly digest launcher (Windows)
+├── docs/                     # images for docs
+├── reports/                  # generated reports (git-ignored)
+├── raw/                      # text sent to the AI on each run (git-ignored)
+└── state.json                # last-run timestamps (git-ignored)
+```
+
+## FAQ
+| Message | Cause and fix |
 |---|---|
-| `'python' 不是内部或外部命令` / 弹出微软商店 | Python 没装好或没加入 PATH。重新运行 Python 安装程序，选 Modify 并勾选 "Add python.exe to PATH" |
-| `config.json 第 X 行格式有误` | 按提示检查那一行，常见是多了或漏了逗号、用了中文引号 |
-| `没找到导出文件` | 还没导出，或者导出位置不在桌面（在 `export_dir` 里填写导出文件夹），或者群号填错了 |
-| `可能需要先重新导出` | 导出文件里没有这段时间的消息，先重新导出 |
-| `401` | API Key 填错了 |
-| `402` | 账户余额不足，去 DeepSeek 平台充值 |
-| 报告里写"没有筛出有用信息" | 有新消息，但 AI 判断都是闲聊。可以在 `profile` 和 `categories` 里写得更具体 |
-| `所有群都没有新消息，未生成报告` | 时间范围内一条消息都没有。可以换 `--hours 72` 试试，或者先重新导出 |
+| `'python' is not recognized` | Python isn't on PATH. Re-run the installer, choose Modify, and tick "Add python.exe to PATH". |
+| `config.json 第 X 行格式有误` | JSON syntax error on that line |
+| `没找到导出文件` (export not found) | Not exported yet, wrong `export_dir`, or wrong group ID |
+| `401` / `402` | Wrong API key / insufficient balance |
+| `没有筛出有用信息` (nothing useful found) | There were messages, but the AI judged them all as chatter. Make `profile` and `categories` more specific. |
 
-## 已知限制
-- 消息很多时（比如一周的活跃群）会分几批交给 AI，**不同批次之间可能出现重复条目**
-- 启动用的 `.bat` 只适用于 Windows。macOS/Linux 可以直接用命令行 `python3 digest.py --preset daily`
-- AI 可能看漏或理解错，重要信息（考试时间、截止日期等）请以原消息为准
+**Known limitations**
+- Large inputs are split into batches, so an item can appear twice when it spans batches.
+- The AI can miss or misread things. Check exam dates and deadlines against the original messages.
 
-## 隐私说明
-- 时间范围内的聊天内容会发送给你配置的 AI 服务商。对隐私要求高的话，可以换成本地模型（见上面"换成其他 AI"）
-- `config.json`、`raw/`、`reports/` 已写入 `.gitignore`。如果你 fork 了本项目，请勿上传这些文件
-- 导出的聊天记录是明文，用完建议删除
+**Privacy**: messages inside the time window are sent to the AI provider you configure. `config.json`, `reports/` and `raw/` are git-ignored.
 
-## 许可证
-[MIT](LICENSE)
+## Contributing
+Issues and PRs are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
-本项目在 AI 辅助下开发。
+1. Fork this repo
+2. Create a branch: `git checkout -b feature/xxx`
+3. Commit: `git commit -m 'Add xxx'`
+4. Push: `git push origin feature/xxx`
+5. Open a Pull Request
+
+## License
+[MIT](LICENSE) © Eutopia
+
+Built with AI assistance.
