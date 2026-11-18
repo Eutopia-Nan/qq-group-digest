@@ -79,6 +79,7 @@
             <div id="windows" class="window-controls" role="group" aria-labelledby="window-title">
               <button type="button" data-window="daily">最近 24 小时</button><button type="button" data-window="weekly">最近 7 天</button>
               <button type="button" data-window="since_last">上次之后</button><button type="button" data-window="custom">自定义</button>
+              <button type="button" data-window="all">全部历史</button><button type="button" data-window="saved-preset" hidden></button>
             </div>
             <form id="custom-window" hidden>
               <label for="window-value" class="field-label">回溯时长</label>
@@ -88,6 +89,8 @@
               </div>
             </form>
             <p id="window-message" class="field-message" role="status" hidden></p>
+            <button type="button" id="save-default" class="text-button" disabled>保存为默认</button>
+            <p id="defaults-message" class="field-message" role="status" hidden></p>
           </section>
           <section class="card estimate" aria-labelledby="estimate-title">
             <h2 id="estimate-title">处理预估</h2>

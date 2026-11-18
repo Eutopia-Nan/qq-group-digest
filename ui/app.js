@@ -5,7 +5,9 @@
   let sources = [];
   let selection = new Set();
   let topic = "study";
-  let windowChoice = "daily";
+  let windowChoice = "since_last";
+  let savedPreset;
+  let savingDefaults = false;
   let currentPlan;
   let estimateVersion = 0;
   let activeJob;
@@ -86,10 +88,11 @@
     select.value = selected;
   }
 
-  async function loadSources(selectAll = false) {
+  async function loadSources(initialSelection) {
     ({ sources } = await request("GET", "/api/sources"));
-    const available = new Set(sources.filter(source => source.configured && source.status === "ok").map(source => source.key));
-    selection = selectAll ? available : new Set([...selection].filter(key => available.has(key)));
+    const configured = new Set(sources.filter(source => source.configured).map(source => source.key));
+    const wanted = initialSelection === null ? configured : (initialSelection ?? selection);
+    selection = new Set([...wanted].filter(key => configured.has(key)));
     renderSources();
     await estimate();
   }
@@ -123,7 +126,6 @@
       const check = node("input");
       check.type = "checkbox";
       check.checked = selection.has(source.key);
-      check.disabled = source.status !== "ok";
       check.setAttribute("aria-label", `选择${source.name}`);
       check.addEventListener("change", () => {
         if (check.checked) selection.add(source.key);
@@ -207,8 +209,25 @@
       const value = $("window-value").valueAsNumber;
       return { mode: "hours", hours: value * ($("window-unit").value === "days" ? 24 : 1) };
     }
-    if (windowChoice === "since_last") return { mode: "since_last" };
-    return { mode: "preset", name: windowChoice };
+    if (windowChoice === "since_last" || windowChoice === "all") return { mode: windowChoice };
+    return { mode: "preset", name: windowChoice === "saved-preset" ? savedPreset : windowChoice };
+  }
+
+  function restoreWindow(window) {
+    if (window?.mode === "all" || window?.mode === "since_last") windowChoice = window.mode;
+    else if (window?.mode === "hours" && validHours(window.hours)) {
+      windowChoice = "custom";
+      $("window-value").value = window.hours;
+      $("window-unit").value = "hours";
+    } else if (window?.mode === "preset" && Object.hasOwn(config.presets ?? {}, window.name)) {
+      if (window.name === "daily" || window.name === "weekly") windowChoice = window.name;
+      else {
+        savedPreset = window.name;
+        windowChoice = "saved-preset";
+      }
+    } else if (window) {
+      message($("defaults-message"), "保存的时间范围已不可用，暂用「上次之后」。");
+    }
   }
 
   function renderWindow() {
@@ -216,12 +235,25 @@
     for (const control of $("windows").querySelectorAll("button")) {
       const name = control.dataset.window;
       control.setAttribute("aria-pressed", String(name === windowChoice));
-      const hours = config.presets?.[name]?.hours;
+      if (name === "saved-preset") {
+        control.hidden = !savedPreset;
+        if (savedPreset) control.textContent = config.presets[savedPreset]?.title || savedPreset;
+      }
+      const hours = (name === "daily" || name === "weekly") && config.presets?.[name]?.hours;
       if (Number(hours) > 0) {
         const days = Number(hours) / 24;
         control.textContent = days > 1 && Number.isInteger(days) ? `最近 ${days} 天` : `最近 ${hours} 小时`;
       }
     }
+  }
+
+  function validHours(hours) {
+    return Number.isFinite(hours) && hours > 0 && hours <= 100000;
+  }
+
+  function canSaveDefaults() {
+    const window = readWindow();
+    return Boolean(config.defaults) && (window.mode !== "hours" || validHours(window.hours));
   }
 
   function setRunEnabled() {
@@ -232,16 +264,17 @@
     const version = ++estimateVersion;
     currentPlan = undefined;
     setRunEnabled();
+    $("save-default").disabled = savingDefaults || !canSaveDefaults();
     message($("window-message"));
     message($("estimate-message"));
     for (const name of ["messages", "batches", "tokens"]) $(`estimate-${name}`).textContent = "—";
-    if (!selection.size) {
-      message($("estimate-message"), "请至少选择一个有导出文件的群。");
+    const window = readWindow();
+    if (window.mode === "hours" && !validHours(window.hours)) {
+      message($("window-message"), "请输入大于 0 且不超过 100000 小时的时长。", true);
       return;
     }
-    const window = readWindow();
-    if (window.mode === "hours" && !(window.hours > 0 && window.hours <= 100000)) {
-      message($("window-message"), "请输入大于 0 且不超过 100000 小时的时长。", true);
+    if (!sources.some(source => source.file && selection.has(source.key))) {
+      message($("estimate-message"), "请至少选择一个有导出文件的群。");
       return;
     }
     try {
@@ -571,6 +604,21 @@
     });
     $("custom-window").addEventListener("submit", event => event.preventDefault());
     $("custom-window").addEventListener("input", estimate);
+    $("save-default").addEventListener("click", () => perform($("defaults-message"), async () => {
+      if (savingDefaults || !canSaveDefaults()) return;
+      const payload = { selection: [...selection], window: readWindow() };
+      savingDefaults = true;
+      $("save-default").disabled = true;
+      message($("defaults-message"), "正在保存…");
+      try {
+        const view = await request("PUT", "/api/defaults", payload);
+        config.defaults = view.defaults;
+        message($("defaults-message"), "已保存，下次打开界面时会恢复这次选择。");
+      } finally {
+        savingDefaults = false;
+        $("save-default").disabled = !canSaveDefaults();
+      }
+    }));
     $("run").addEventListener("click", () => perform($("estimate-message"), async () => {
       if (!currentPlan || activeJob || starting) return;
       starting = true;
@@ -601,13 +649,15 @@
     token = loadToken();
     const status = await request("GET", "/api/status");
     config = await request("GET", "/api/config");
+    restoreWindow(config.defaults?.window);
+    if (!config.defaults) message($("defaults-message"), "当前本机服务尚未提供保存默认的接口。");
     topic = Object.hasOwn(config.topics, topic) ? topic : Object.keys(config.topics)[0];
     $("profile").value = config.config.profile || "";
     activeJob = status.running_job || undefined;
     renderFocus();
     renderWindow();
     bindControls();
-    await loadSources(true);
+    await loadSources(config.defaults?.selection ?? null);
     navigate();
     if (activeJob) await poll();
     if (!status.config_exists) editSettings(true);
