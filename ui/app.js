@@ -483,7 +483,7 @@
 
   async function settingsConfig() {
     // Config replacement requires the complete current document, including fields the UI doesn't edit.
-    const { config: latest } = await request("GET", "/api/config");
+    const { config: { selection: _selection, window: _window, ...latest } } = await request("GET", "/api/config");
     const hours = { daily: $("daily-hours").valueAsNumber, weekly: $("weekly-hours").valueAsNumber };
     if (Object.values(hours).some(value => !(value > 0 && value <= 100000))) {
       throw new Error("快报小时数应大于 0 且不超过 100000。");
@@ -494,7 +494,7 @@
     const savedUrl = provider.base_url || "https://api.deepseek.com";
     const keepKey = baseUrl.replace(/\/+$/, "") === savedUrl.replace(/\/+$/, "");
     const apiKey = key || (keepKey ? oldKey : undefined);
-    return { ...latest, groups: latest.groups ?? [], deepseek: {
+    return { ...latest, profile: latest.profile ?? "", groups: latest.groups ?? [], deepseek: {
       ...provider, base_url: baseUrl, model: $("api-model").value.trim(),
       ...(apiKey !== undefined ? { api_key: apiKey } : {}),
     }, export_dir: $("export-dir").value.trim(), report_dir: $("report-dir").value.trim(),
@@ -672,6 +672,8 @@
     config = await request("GET", "/api/config");
     restoreWindow(config.defaults?.window);
     if (!config.defaults) message($("defaults-message"), "当前本机服务尚未提供保存默认的接口。");
+    const defaultsWarnings = config.issues?.filter(issue => issue.field === "ui_defaults" && issue.level === "warning");
+    if (defaultsWarnings?.length) message($("defaults-message"), defaultsWarnings.map(issue => issue.message).join(" "));
     topic = Object.hasOwn(config.topics, topic) ? topic : Object.keys(config.topics)[0];
     $("profile").value = config.config.profile || "";
     activeJob = status.running_job || undefined;
