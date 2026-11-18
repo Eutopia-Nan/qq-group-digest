@@ -169,6 +169,39 @@ class ConfigEndpoints(AppTestCase):
         issues = self.api("POST", "/api/config/validate", cfg)["issues"]
         self.assertTrue(any(i["level"] == "error" for i in issues))
 
+    def test_partial_put_config_cannot_wipe_config(self):
+        """2b 原型的"保存为默认"曾发 PUT /api/config {selection, window}，返回 200 并清空了 Key、画像和群。"""
+        before = self.config.read_bytes()
+        body = {"selection": ["group:123"], "window": {"mode": "preset", "name": "daily"}}
+        self.assertEqual(self.api("PUT", "/api/config", body, expect=400)["field"], "deepseek")
+        full = self.api("GET", "/api/config")["config"]
+        self.assertIn("/api/defaults", self.api("PUT", "/api/config", {**full, **body}, expect=400)["error"])
+        self.api("PUT", "/api/config", [1, 2], expect=400)
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_unknown_keys_already_in_config_are_kept(self):
+        cfg = json.loads(self.config.read_text(encoding="utf-8"))
+        cfg["my_note"] = "用户手写的字段"
+        self.config.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+        full = self.api("GET", "/api/config")["config"]
+        self.api("PUT", "/api/config", full)
+        self.assertEqual(json.loads(self.config.read_text(encoding="utf-8"))["my_note"], "用户手写的字段")
+
+    def test_defaults_round_trip(self):
+        view = self.api("GET", "/api/config")
+        self.assertEqual(view["defaults"], {"selection": None, "window": {"mode": "since_last"}})
+        body = {"selection": ["group:123"], "window": {"mode": "preset", "name": "weekly"}}
+        view = self.api("PUT", "/api/defaults", body)
+        self.assertEqual(view["defaults"], body)
+        saved = json.loads(self.config.read_text(encoding="utf-8"))
+        self.assertEqual(saved["ui_defaults"], body)
+        self.assertEqual(saved["deepseek"]["api_key"], self.KEY, "保存默认不能动别的配置")
+        before = self.config.read_bytes()
+        self.api("PUT", "/api/defaults", {"selection": ["group:999"], "window": {"mode": "all"}}, expect=400)
+        self.api("PUT", "/api/defaults", {"selection": None, "window": {"mode": "preset", "name": "nope"}}, expect=400)
+        self.api("PUT", "/api/defaults", {"selection": None}, expect=400)
+        self.assertEqual(self.config.read_bytes(), before)
+
     def test_status_and_test_connection(self):
         status = self.api("GET", "/api/status")
         self.assertEqual((status["version"], status["config_exists"], status["running_job"]), (app.VERSION, True, None))
