@@ -17,7 +17,8 @@
   let cancelling = false;
   let jobMessage = "";
   let pendingImports = [];
-  let activeReport;
+  let activeReportId;
+  let pendingReportPath;
   let reportVersion = 0;
 
   function loadToken() {
@@ -53,7 +54,9 @@
     catch { throw new Error("无法连接本机服务，请确认启动窗口仍在运行。"); }
     const result = await response.json().catch(() => null);
     if (response.status === 401 || response.status === 403) throw new Error("本机访问授权已失效，请重新打开启动窗口显示的网址。");
-    if (!response.ok) throw Object.assign(new Error(result?.error || `本机服务返回错误（${response.status}）。`), { field: result?.field });
+    if (!response.ok) throw Object.assign(new Error(result?.error || `本机服务返回错误（${response.status}）。`), {
+      status: response.status, field: result?.field,
+    });
     if (!result) throw new Error("本机服务返回了无法识别的数据。");
     return result;
   }
@@ -304,8 +307,21 @@
     $("import-group-id").focus();
   }
 
+  async function uploadFile(file, params = new URLSearchParams()) {
+    const query = new URLSearchParams(params);
+    const upload = () => request("POST", `/api/import${query.size ? `?${query}` : ""}`, undefined, file);
+    try { return await upload(); }
+    catch (error) {
+      if (error.status !== 409 || error.field !== "overwrite") throw error;
+      if (!window.confirm(error.message)) return null;
+      query.set("overwrite", "1");
+      return upload();
+    }
+  }
+
   async function importFiles(files) {
     let added = 0;
+    let skipped = 0;
     const errors = [];
     for (const file of files) {
       if (!/\.(csv|txt)$/i.test(file.name) || !file.size) {
@@ -316,14 +332,18 @@
         pendingImports.push(file);
         continue;
       }
-      try { await request("POST", "/api/import", undefined, file); added++; }
+      try {
+        if (await uploadFile(file)) added++;
+        else skipped++;
+      }
       catch (error) {
         if (error.field === "group_id") pendingImports.push(file);
         else errors.push(error.message);
       }
     }
     if (added) await loadSources();
-    message($("source-message"), [added ? `已导入 ${added} 个文件。` : "", ...new Set(errors)].filter(Boolean).join(" "), Boolean(errors.length));
+    const summary = [added && `已导入 ${added} 个文件。`, skipped && `已保留 ${skipped} 个同名原文件。`, ...new Set(errors)];
+    message($("source-message"), summary.filter(Boolean).join(" "), Boolean(errors.length));
     showNextImport();
   }
 
@@ -351,7 +371,7 @@
     clearTimeout(pollTimer);
     activeJob = undefined;
     cancelling = false;
-    if (reportPath) activeReport = reportPath;
+    if (reportPath) pendingReportPath = reportPath;
     setRunEnabled();
     if (location.hash === "#reports") perform($("global-message"), loadReports);
   }
@@ -419,28 +439,29 @@
     return fragment;
   }
 
-  async function showReport(path) {
-    activeReport = path;
+  async function showReport(id) {
+    activeReportId = id;
     const version = ++reportVersion;
     for (const item of $("report-list").querySelectorAll("button")) {
-      item.setAttribute("aria-current", String(item.dataset.path === path));
+      item.setAttribute("aria-current", String(item.dataset.reportId === id));
     }
-    const name = path.split(/[\\/]/).at(-1);
-    const report = await request("GET", `/api/reports/${encodeURIComponent(name)}`);
+    const report = await request("GET", `/api/reports/${encodeURIComponent(id)}`);
     if (version === reportVersion) $("report-content").replaceChildren(markdown(report.markdown));
   }
 
   async function loadReports() {
     const { reports } = await request("GET", "/api/reports");
     $("report-list").replaceChildren(...reports.map(report => {
-      const item = button(report.title, () => perform($("global-message"), () => showReport(report.path)), "history-button");
+      const item = button(report.title, () => perform($("global-message"), () => showReport(report.id)), "history-button");
       const date = new Date(report.created * 1000).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
       item.append(node("small", date));
-      item.dataset.path = report.path;
+      item.dataset.reportId = report.id;
       return item;
     }));
-    const report = reports.find(entry => entry.path === activeReport) || reports[0];
-    if (report) await showReport(report.path);
+    const report = (pendingReportPath && reports.find(entry => entry.path === pendingReportPath)) ||
+      reports.find(entry => entry.id === activeReportId) || reports[0];
+    pendingReportPath = undefined;
+    if (report) await showReport(report.id);
     else $("report-content").replaceChildren(node("p", "还没有生成快报。"));
   }
 
@@ -551,10 +572,10 @@
       submit.disabled = true;
       perform($("source-message"), async () => {
         try {
-          const result = await request("POST", `/api/import?${query}`, undefined, file);
+          const result = await uploadFile(file, query);
           pendingImports.shift();
-          await loadSources();
-          message($("source-message"), `已导入「${result.saved}」。`);
+          if (result) await loadSources();
+          message($("source-message"), result ? `已导入「${result.saved}」。` : "已保留同名原文件。");
           showNextImport();
         } finally { submit.disabled = false; }
       });
