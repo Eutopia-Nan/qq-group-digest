@@ -89,6 +89,7 @@ textarea { resize: vertical; display: block; }
 .job-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .88rem; }
 progress { display: block; accent-color: var(--accent); width: 100%; margin: 6px 0; }
 .global-message { background: #fcefee; color: var(--error); padding: 9px 12px; margin-bottom: 12px; border-radius: 6px; }
+.status-warnings { background: #fff6e2; color: #674b18; margin: 0 0 12px; padding: 9px 12px 9px 30px; border-radius: 6px; }
 .reports-layout { display: grid; grid-template-columns: minmax(230px, .37fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .report-sidebar h2 { margin-bottom: 13px; }
 .history-button { display: block; width: 100%; text-align: left; padding: 10px; border: 1px solid transparent; background: white; color: #23302c; border-radius: 7px; overflow-wrap: anywhere; }

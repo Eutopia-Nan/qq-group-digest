@@ -81,6 +81,18 @@
     target.classList.toggle("error", error);
   }
 
+  function showWarnings(issues = []) {
+    const list = $("status-warnings");
+    const warnings = issues.filter(issue => issue.level === "warning");
+    list.replaceChildren(...warnings.map(issue => node("li", issue.message)));
+    list.hidden = !warnings.length;
+  }
+
+  function applyConfig(view) {
+    config = view;
+    if (Array.isArray(view.issues)) showWarnings(view.issues);
+  }
+
   async function perform(target, action) {
     try { await action(); }
     catch (error) { message(target, error.message, true); }
@@ -144,7 +156,7 @@
         const previous = source.type;
         const next = select.value;
         select.disabled = true;
-        try { config = await request("PATCH", `/api/groups/${encodeURIComponent(source.group_id)}`, { type: next }); }
+        try { applyConfig(await request("PATCH", `/api/groups/${encodeURIComponent(source.group_id)}`, { type: next })); }
         catch (error) { select.value = previous; throw error; }
         finally { select.disabled = false; }
         source.type = next;
@@ -154,7 +166,7 @@
         await estimate();
       }));
       const remove = button("移除", () => perform(status, async () => {
-        config = await request("DELETE", `/api/groups/${encodeURIComponent(source.group_id)}`);
+        applyConfig(await request("DELETE", `/api/groups/${encodeURIComponent(source.group_id)}`));
         await loadSources();
         message($("source-message"), `已移除「${source.name}」。`);
       }));
@@ -162,7 +174,7 @@
       row.append(label, select, remove);
     } else {
       const add = button("＋ 添加", () => perform(status, async () => {
-        config = await request("POST", "/api/groups", { group_id: source.group_id, name: source.name, type: topic });
+        applyConfig(await request("POST", "/api/groups", { group_id: source.group_id, name: source.name, type: topic }));
         selection.add(source.key);
         await loadSources();
         message($("source-message"), `已添加「${source.name}」。`);
@@ -192,7 +204,7 @@
       const chip = node("span", name, "chip");
       chip.title = description;
       const remove = button("×", () => perform($("category-message"), async () => {
-        config = await request("DELETE", categoryPath(name));
+        applyConfig(await request("DELETE", categoryPath(name)));
         renderFocus();
         $("show-category").focus();
         message($("category-message"), `已删除「${name}」。`);
@@ -309,7 +321,10 @@
 
   async function uploadFile(file, params = new URLSearchParams()) {
     const query = new URLSearchParams(params);
-    const upload = () => request("POST", `/api/import${query.size ? `?${query}` : ""}`, undefined, file);
+    const upload = () => {
+      const search = query.toString();
+      return request("POST", search ? `/api/import?${search}` : "/api/import", undefined, file);
+    };
     try { return await upload(); }
     catch (error) {
       if (error.status !== 409 || error.field !== "overwrite") throw error;
@@ -372,7 +387,7 @@
     activeJob = undefined;
     cancelling = false;
     if (reportPath) pendingReportPath = reportPath;
-    setRunEnabled();
+    estimate();
     if (location.hash === "#reports") perform($("global-message"), loadReports);
   }
 
@@ -524,7 +539,7 @@
       submission.disabled = true;
       perform($("settings-message"), async () => {
         try {
-          config = await request("PUT", "/api/config", await settingsConfig());
+          applyConfig(await request("PUT", "/api/config", await settingsConfig()));
           $("settings-form").reset();
           $("settings").close();
           renderWindow();
@@ -582,7 +597,7 @@
     });
     $("profile").addEventListener("change", () => perform($("profile-message"), async () => {
       const updated = await request("PUT", "/api/focus", { profile: $("profile").value });
-      config = updated;
+      applyConfig(updated);
       $("profile").value = updated.config.profile || "";
       message($("profile-message"), "已保存。");
     }));
@@ -599,7 +614,7 @@
       perform($("category-message"), async () => {
         const name = $("category-name").value.trim();
         if (!name) throw new Error("请输入分类名。");
-        config = await request("PUT", categoryPath(name), { description: $("category-description").value });
+        applyConfig(await request("PUT", categoryPath(name), { description: $("category-description").value }));
         setCategoryForm(false);
         renderFocus();
         $("show-category").focus();
@@ -611,7 +626,7 @@
       if (!level) return;
       perform($("explain-message"), async () => {
         const updated = await request("PUT", "/api/focus", { explain_level: level });
-        config = updated;
+        applyConfig(updated);
         renderFocus();
         message($("explain-message"), "已保存。");
       });
@@ -627,13 +642,15 @@
     $("custom-window").addEventListener("input", estimate);
     $("save-default").addEventListener("click", () => perform($("defaults-message"), async () => {
       if (savingDefaults || !canSaveDefaults()) return;
-      const payload = { selection: [...selection], window: readWindow() };
+      const configured = sources.filter(source => source.configured);
+      const allSelected = configured.length > 0 && configured.every(source => selection.has(source.key));
+      const payload = { selection: allSelected ? null : [...selection], window: readWindow() };
       savingDefaults = true;
       $("save-default").disabled = true;
       message($("defaults-message"), "正在保存…");
       try {
         const view = await request("PUT", "/api/defaults", payload);
-        config.defaults = view.defaults;
+        applyConfig(view);
         message($("defaults-message"), "已保存，下次打开界面时会恢复这次选择。");
       } finally {
         savingDefaults = false;
@@ -669,7 +686,8 @@
   perform($("global-message"), async () => {
     token = loadToken();
     const status = await request("GET", "/api/status");
-    config = await request("GET", "/api/config");
+    showWarnings(status.issues);
+    applyConfig(await request("GET", "/api/config"));
     restoreWindow(config.defaults?.window);
     if (!config.defaults) message($("defaults-message"), "当前本机服务尚未提供保存默认的接口。");
     const defaultsWarnings = config.issues?.filter(issue => issue.field === "ui_defaults" && issue.level === "warning");
