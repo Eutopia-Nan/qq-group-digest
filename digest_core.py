@@ -1065,7 +1065,9 @@ def list_reports(cfg):
             except OSError:
                 continue
             title = first[2:].strip() if first.startswith("# ") else path.stem
-            reports.append({"path": str(path), "name": path.name, "dir": str(folder),
+            # id 由完整路径算出：不同文件夹里的同名快报也能分别打开
+            report_id = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
+            reports.append({"id": report_id, "path": str(path), "name": path.name, "dir": str(folder),
                             "title": title, "created": stat.st_mtime, "size": stat.st_size})
     reports.sort(key=lambda r: r["created"], reverse=True)
     return reports
