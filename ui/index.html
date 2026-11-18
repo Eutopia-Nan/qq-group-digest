@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>QQ群聊整理</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="mock-api.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">群</span>QQ群聊整理</a>
+      <nav aria-label="主导航">
+        <a href="#home" id="home-link">主页</a>
+        <a href="#reports" id="reports-link">快报</a>
+      </nav>
+      <span class="demo-mode">演示模式</span>
+    </div>
+  </header>
+  <main class="shell">
+    <div id="global-message" class="global-message" role="status" hidden></div>
+    <section id="home-view">
+      <header class="page-heading">
+        <h1>生成快报</h1>
+        <p>选好群和时间范围，再按你的关注点整理消息。</p>
+      </header>
+      <div class="dashboard">
+        <div class="primary">
+          <section class="card" aria-labelledby="groups-title">
+            <div class="card-head">
+              <div><h2 id="groups-title">群聊来源</h2><p id="selection-count"></p></div>
+              <label class="button" id="import-zone">导入 CSV / TXT<input type="file" id="import-input" accept=".csv,.txt" multiple></label>
+            </div>
+            <p id="source-message" class="field-message" role="status" hidden></p>
+            <div id="groups"></div>
+            <div id="discovered" class="discovered" hidden><h3>发现的导出文件</h3><div id="discovered-list"></div></div>
+          </section>
+
+          <section class="card" aria-labelledby="focus-title">
+            <div class="card-head"><div><h2 id="focus-title">我的关注点</h2><p>同一类型的群共用一套分类。</p></div></div>
+            <label class="field-label" for="profile">个人情况</label>
+            <textarea id="profile" rows="2" maxlength="1000" placeholder="比如大二，想找暑期实习，也关注高数作业。"></textarea>
+            <small id="profile-message" class="field-message" role="status">离开输入框时保存</small>
+            <div class="category-head">
+              <label class="field-label" for="topic">信息分类</label>
+              <select id="topic"></select>
+            </div>
+            <div id="categories" class="categories"></div>
+            <button id="show-category" type="button" class="text-button" aria-controls="category-form" aria-expanded="false">＋ 添加分类</button>
+            <form id="category-form" class="category-form" hidden>
+              <label>分类名<input id="category-name" maxlength="30" required></label>
+              <label>筛选说明<input id="category-description" maxlength="160" required></label>
+              <button type="submit" class="button primary-button">添加</button>
+              <button type="button" id="hide-category" class="button">取消</button>
+            </form>
+            <p id="category-message" class="field-message" role="status" hidden></p>
+            <div class="explanation">
+              <p class="field-label" id="explain-label">术语解释</p>
+              <div id="explain" class="segment" role="group" aria-labelledby="explain-label">
+                <button type="button" data-level="detailed">详细</button><button type="button" data-level="brief">简短</button><button type="button" data-level="off">不要</button>
+              </div>
+              <p id="explain-message" class="field-message" role="status" hidden></p>
+            </div>
+          </section>
+        </div>
+
+        <aside class="secondary">
+          <section class="card" aria-labelledby="window-title">
+            <h2 id="window-title">回溯时间</h2>
+            <div id="windows" class="window-controls" role="group" aria-labelledby="window-title">
+              <button type="button" data-window="daily">最近 24 小时</button><button type="button" data-window="weekly">最近 7 天</button>
+              <button type="button" data-window="since_last">上次之后</button><button type="button" data-window="custom">自定义</button>
+            </div>
+            <form id="custom-window" hidden>
+              <label for="window-value" class="field-label">回溯时长</label>
+              <div class="custom-fields">
+                <input id="window-value" type="number" min="0" step="any" value="48" required>
+                <select id="window-unit" aria-label="时间单位"><option value="hours">小时</option><option value="days">天</option></select>
+              </div>
+            </form>
+            <p id="window-message" class="field-message" role="status" hidden></p>
+            <button type="button" id="save-default" class="text-button">保存为默认</button>
+          </section>
+          <section class="card estimate" aria-labelledby="estimate-title">
+            <h2 id="estimate-title">处理预估</h2>
+            <dl class="metrics">
+              <div><dt>待处理消息</dt><dd id="estimate-messages">—</dd></div>
+              <div><dt>预计调用次数</dt><dd id="estimate-batches">—</dd></div>
+              <div><dt>预估 Token</dt><dd id="estimate-tokens">—</dd></div>
+            </dl>
+            <p id="estimate-message" class="field-message" role="status"></p>
+            <button type="button" id="run" class="button primary-button run-button" disabled>生成快报</button>
+            <div id="job" class="job" hidden>
+              <div class="job-head"><span id="job-status" role="status"></span><button type="button" id="cancel" class="text-button">取消</button></div>
+              <progress id="progress" value="0" max="1" aria-label="快报生成进度"></progress>
+              <a id="job-report" class="text-button" href="#reports" hidden>查看快报 →</a>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <section id="reports-view" hidden>
+      <header class="page-heading"><h1>快报</h1><p>查看已生成的快报和消息摘录。</p></header>
+      <div class="reports-layout">
+        <section class="card report-sidebar" aria-labelledby="history-title">
+          <h2 id="history-title">历史快报</h2><div id="report-list"></div>
+        </section>
+        <section class="card reader" aria-label="快报预览">
+          <div id="report-content" class="markdown" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
