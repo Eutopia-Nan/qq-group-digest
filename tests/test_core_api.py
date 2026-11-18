@@ -366,6 +366,25 @@ class ReviewRegressions(CoreTestCase):
         cfg = self.read_config()
         self.assertEqual((cfg["profile"], cfg["groups"][0]["type"]), ("新画像", "opensource"))
 
+    def test_cancel_during_last_request_keeps_result_without_progress(self):
+        """Codex 联调：只有一批时，在模型返回前取消 → 保留返回的结果，但不推进进度。"""
+        self.write_export(123, "学习群", [("2027-01-01 11:00", "甲", "明天考高数")])
+        cfg = core.load_config()
+        cancel = threading.Event()
+        real_post = self.fake_post
+
+        def cancel_while_waiting(*args, **kwargs):
+            cancel.set()  # 用户在请求进行中点了取消
+            return real_post(*args, **kwargs)
+        with patch.object(core, "http_post", cancel_while_waiting):
+            outcome = core.run(cfg, core.plan(cfg), None, cancel)
+        self.assertTrue(outcome["cancelled"])
+        self.assertEqual((outcome["sources"][0]["status"], outcome["sources"][0]["items"]), ("ok", 1))
+        report = Path(outcome["report_path"]).read_text(encoding="utf-8")
+        self.assertIn("#### ★★★★ 标题", report)
+        self.assertIn("处理进度没有推进", report)
+        self.assertFalse((self.root / "state.json").exists(), "取消时不能推进进度")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1365,6 +1365,10 @@ def run_digest(cfg, jobs, window, settings, dry_run=False, encoding=None, emit=N
                 sections.append(section)
             if checkpoint:
                 updates[job.key] = checkpoint
+        if cancel is not None and cancel.is_set() and not outcome["cancelled"]:
+            # 最后一批请求进行中被取消：结果已付费，照常写入报告，但不推进进度
+            outcome["cancelled"] = True
+            _emit(emit, "\n任务已取消。", level="warn", stage="cancelled")
         failures = outcome["failures"]
         if dry_run:
             _emit(emit, "\ndry-run 结束。成功处理的原文保存于 raw/，未调用 AI。" if failures else
