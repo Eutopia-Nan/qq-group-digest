@@ -536,6 +536,8 @@ def validate_config(cfg):
             for key in ("title", "report_dir"):
                 if key in preset and not isinstance(preset[key], str):
                     issues.append(_issue("presets", f"预设 {name!r} 的 {key} 必须是字符串。"))
+    if not any(i["level"] == "error" for i in issues):
+        issues.extend(_ui_defaults_issues(cfg))
 
     if not any(i["level"] == "error" for i in issues):
         ds = cfg.get("deepseek", {})
@@ -631,6 +633,9 @@ def remove_group(cfg_path, group_id):
     def change(cfg):
         index = _group_index(cfg, gid)
         cfg["groups"].pop(index)
+        defaults = cfg.get("ui_defaults")
+        if isinstance(defaults, dict) and isinstance(defaults.get("selection"), list):
+            defaults["selection"] = [k for k in defaults["selection"] if k != f"group:{gid}"]
     return _update(cfg_path, change)
 
 
@@ -724,6 +729,127 @@ def set_preset_hours(cfg_path, preset, hours):
             raise DigestError(f"config.json 中的 presets.{preset} 必须是 JSON 对象。")
         presets[preset] = {**current, "hours": hours}
     return _update(cfg_path, change)
+
+
+# ---------------------------------------------------------------- 界面默认选择（ui_defaults）
+# 主页"保存为默认"保存的勾选和时间范围。命令行不读这个字段。
+
+def _default_ui_defaults():
+    return {"selection": None, "window": {"mode": "since_last"}}
+
+
+def _normalize_selection(selection):
+    """None（全部已配置的群）或不重复的 "group:<群号>" 列表。"""
+    if selection is None:
+        return None
+    if not isinstance(selection, list):
+        raise DigestError("默认勾选必须是列表。")
+    keys = []
+    for key in selection:
+        if not isinstance(key, str) or not re.fullmatch(r"group:[0-9]+", key):
+            raise DigestError(f"默认勾选里有无效的来源：{key!r}。")
+        if key in keys:
+            raise DigestError(f"默认勾选里重复出现了 {key}。")
+        keys.append(key)
+    return keys
+
+
+def _normalize_window(spec):
+    """只检查时间范围的格式，返回规范写法；预设是否存在由 window_from_spec 检查。"""
+    if not isinstance(spec, dict):
+        raise DigestError("时间范围无效。")
+    mode = spec.get("mode")
+    if mode in ("since_last", "all"):
+        return {"mode": mode}
+    if mode == "hours":
+        try:
+            hours = window_hours(spec.get("hours"))
+        except ValueError as e:
+            raise DigestError(f"{e}。") from None
+        return {"mode": "hours", "hours": int(hours) if hours == int(hours) else hours}
+    if mode == "preset":
+        name = spec.get("name")
+        if not isinstance(name, str) or not name:
+            raise DigestError("请选择一个预设。")
+        return {"mode": "preset", "name": name}
+    raise DigestError("时间范围无效。")
+
+
+def _configured_keys(cfg):
+    try:
+        return {f"group:{gid}" for gid, _, _ in configured_groups(cfg)}
+    except DigestError:
+        return set()
+
+
+def get_defaults(cfg):
+    """界面恢复用的默认选择。字段缺失或写坏时回退为"全部群 + 上次之后"，只在读取时回退，不改写配置。
+
+    - 已不在 groups 里的群会被过滤掉
+    - 引用的预设已删除（或不再合法）时，时间范围回退为 since_last
+    """
+    result = _default_ui_defaults()
+    raw = cfg.get("ui_defaults")
+    if not isinstance(raw, dict):
+        return result
+    try:
+        selection = _normalize_selection(raw.get("selection"))
+    except DigestError:
+        selection = None
+    if selection is not None:
+        configured = _configured_keys(cfg)
+        selection = [key for key in selection if key in configured]
+    result["selection"] = selection
+    try:
+        window = _normalize_window(raw.get("window", {"mode": "since_last"}))
+        window_from_spec(cfg, window)
+        result["window"] = window
+    except DigestError:
+        pass
+    return result
+
+
+def set_defaults(cfg_path, selection, window):
+    """保存主页的默认勾选和时间范围。群必须已配置，预设必须存在。"""
+    selection = _normalize_selection(selection)
+    window = _normalize_window(window)
+
+    def change(cfg):
+        if selection is not None:
+            configured = _configured_keys(cfg)
+            unknown = [key for key in selection if key not in configured]
+            if unknown:
+                raise DigestError(f"这些群还没有添加：{', '.join(k.split(':', 1)[1] for k in unknown)}。")
+        window_from_spec(cfg, window)
+        cfg["ui_defaults"] = {"selection": selection, "window": window}
+    return _update(cfg_path, change)
+
+
+def _ui_defaults_issues(cfg):
+    """validate_config 用：格式错误是 error；引用了已删除的群或预设只是 warning。"""
+    if "ui_defaults" not in cfg:
+        return []
+    raw = cfg["ui_defaults"]
+    if not isinstance(raw, dict):
+        return [_issue("ui_defaults", "config.json 中的 ui_defaults 必须是 JSON 对象。")]
+    issues = []
+    try:
+        selection = _normalize_selection(raw.get("selection"))
+        missing = [k for k in selection or [] if k not in _configured_keys(cfg)]
+        if missing:
+            issues.append(_issue("ui_defaults", f"默认勾选里的群已不在群列表中：{', '.join(missing)}。", "warning"))
+    except DigestError as e:
+        issues.append(_issue("ui_defaults", str(e)))
+    try:
+        window = _normalize_window(raw.get("window", {"mode": "since_last"}))
+    except DigestError as e:
+        issues.append(_issue("ui_defaults", str(e)))
+    else:
+        try:
+            window_from_spec(cfg, window)
+        except DigestError as e:
+            issues.append(_issue("ui_defaults", f"默认时间范围不可用，界面会改用「上次之后」。{e}", "warning"))
+    return issues
 
 
 # ---------------------------------------------------------------- AI 接口
@@ -1065,7 +1191,9 @@ def list_reports(cfg):
             except OSError:
                 continue
             title = first[2:].strip() if first.startswith("# ") else path.stem
-            reports.append({"path": str(path), "name": path.name, "dir": str(folder),
+            # id 由完整路径算出：不同文件夹里的同名快报也能分别打开
+            report_id = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
+            reports.append({"id": report_id, "path": str(path), "name": path.name, "dir": str(folder),
                             "title": title, "created": stat.st_mtime, "size": stat.st_size})
     reports.sort(key=lambda r: r["created"], reverse=True)
     return reports
@@ -1175,6 +1303,8 @@ def resolve_window(cfg, preset=None, hours=None, all_=False, emit=None):
 def window_from_spec(cfg, spec, emit=None):
     """界面用的时间范围：{"mode": "since_last" | "hours" | "all" | "preset", "hours": N, "name": "daily"}"""
     spec = spec or {"mode": "since_last"}
+    if not isinstance(spec, dict):
+        raise DigestError("时间范围无效。")
     mode = spec.get("mode")
     if mode == "since_last":
         return resolve_window(cfg, emit=emit)
