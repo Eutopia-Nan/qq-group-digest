@@ -218,6 +218,10 @@ CSV supports comma, semicolon and Tab delimiters. Timestamps can be local date-t
 ```
 
 ## FAQ
+> Want to change which groups are processed, a group's type, what to focus on, or how far back to look? See the [customization FAQ](docs/faq.md).
+
+Messages you may see while running, and how to fix them:
+
 | Message | Cause and fix |
 |---|---|
 | `'python' is not recognized` | Python isn't on PATH. Re-run the installer, choose Modify, and tick "Add python.exe to PATH". |
