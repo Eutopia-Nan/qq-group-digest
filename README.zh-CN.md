@@ -25,16 +25,15 @@
 ## 功能特性
 
 - 从 QQ 群聊记录中筛选考试通知、学习资料、实习兼职等信息，按需设置关注内容。
-- 根据个人情况判断机会是否适合，解释相关术语。
+- 解释相关术语。
 - 生成每日或每周 Markdown 快报，附原文摘录和消息时间。
-- 支持 CSV、TXT 和 OpenAI 兼容接口，只用 Python 标准库。
 
 ## 两种上手方式
 
 | | 适合谁 | 怎么做 |
 |---|---|---|
 | **方式 A：手动操作** | 想自己弄清楚每一步 | 按下面的[快速开始](#快速开始)和[使用方法](#使用方法)一步步操作，大约 10 分钟 |
-| **方式 B：交给 AI Agent 自动配置** | 电脑上有能执行命令的 AI 助手（如 Claude Code、Codex、Cursor 等） | 复制下面整段提示词发给它，它会边问你边完成配置 |
+| **方式 B：交给 AI Agent 自动配置** | 电脑上有能执行命令的 AI 助手（如 Claude Code、Codex、Cursor、DSH 等） | 复制下面整段提示词发给它，它会边问你边完成配置 |
 
 <details>
 <summary><b>方式 B：复制这段提示词发给你的 Agent</b>（点击展开）</summary>
@@ -91,14 +90,6 @@ cd qq-group-digest
 
 无需安装任何依赖。
 
-想先确认安装是否成功？在解压后的项目文件夹地址栏输入 `cmd` 并回车，然后运行：
-
-```bash
-python digest.py --file examples/study.csv --type study --all --dry-run
-```
-
-终端会显示窗口内 2 条、待处理 1 条。筛选后的示例原文保存在 `raw/`。
-
 ## 使用方法
 
 ### 第 1 步：填写配置
@@ -136,14 +127,13 @@ python digest.py --file examples/study.csv --type study --all --dry-run
 - `1_今日快报_24小时.bat`：最近 24 小时，报告存到 `reports\今日快报\`
 - `2_今周快报_一周.bat`：最近 7 天，报告存到 `reports\今周快报\`
 
-报告是 `.md` 文件，运行完会自动打开。用记事本就能看，用 VS Code、Typora 或 Obsidian 打开排版更好。
+报告是 `.md` 文件
 
 ### 日常使用
-**每次都要先重新导出，再运行**，因为本工具不会自己去 QQ 里拿新消息：
+**每次都要先重新导出，再运行**：
 
 1. 用导出工具重新导出（覆盖旧文件即可）
 2. 双击 `.bat` 生成报告
-3. 需要清理明文时，也检查试运行或启用 `save_raw` 时生成的 `raw/` 副本。报告可能包含聊天摘录
 
 ### 命令行参数
 ```bash
@@ -163,14 +153,14 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `deepseek.api_key` | 当前 AI 接口的 Key。官方 DeepSeek 地址也可用 `DEEPSEEK_API_KEY` | 云端服务通常需要 |
+| `deepseek.api_key` | 当前 AI 接口的 Key。 | 云端服务通常需要 |
 | `deepseek.base_url` | AI 接口地址，任何 OpenAI 兼容接口都可以 | `https://api.deepseek.com` |
-| `deepseek.model` | 模型名，旧配置中的 `deepseek-chat` 和 `deepseek-reasoner` 需更新 | `deepseek-flash` |
+| `deepseek.model` | 模型名 |
 | `deepseek.json_mode` | 是否要求接口启用 JSON 模式。关闭后仍校验返回的 JSON | `true` |
 | `deepseek.chunk_chars` | 每批用户消息的字符上限。用小上下文模型时可以调低 | `40000` |
 | `deepseek.max_tokens` | 每批模型输出的 token 上限 | `4096` |
 | `profile` | 你的身份、能力和需求，帮助模型判断什么对你有用 | 无 |
-| `explain_style` | 术语解释的风格。留空 `""` 就不解释 | 零基础，大白话 + 生活类比 |
+| `explain_style` | 术语解释的风格。留空 `""` 就不解释 |
 | `topics` | 群类型，以及每类群的关注点和分类（见下文） | `study`、`opensource` |
 | `groups` | 要筛选的群：`id` 群号、`name` 群名、`type` 群类型 | 无，必填 |
 | `export_dir` | 导出文件所在的文件夹 | `桌面\QQ聊天记录导出` |
@@ -202,10 +192,8 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 然后把对应群的 `type` 写成 `"job"`。
 
 - `label`：群的描述
-- `focus`：这类群里你最关心什么
+- `focus`：你关心什么
 - `categories`：分类名 → 这个分类收集什么
-- 不需要写"其他有用"分类，程序会自动补上
-- 正在使用的类型不要删；类型不存在时，程序会在调用 AI 之前就报错，不会白花钱
 
 ### 换成其他 AI
 把 `base_url`、`model` 和 `api_key` 改为当前服务的配置。使用本机 Ollama 时可填 `"base_url": "http://localhost:11434/v1"` 和已下载的模型名，如 `"model": "qwen2.5"`，并清空 `api_key`。接口不支持 `response_format` 时，在 `deepseek` 里设 `"json_mode": false`。
@@ -214,8 +202,8 @@ python digest.py --all               # 处理全部历史记录（很费钱，�
 | 格式 | 示例 |
 |---|---|
 | CSV（推荐） | 表头包含时间列（`时间`/`日期`/`time`/`date`）和内容列（`内容`/`消息`/`content`/`message`），发送者列（`发送者`/`昵称`/`sender`/`name`）可选 |
-| 单行 TXT | `[2026-11-17 14:03:00] 张三: 内容`（冒号中英文都可以，秒可以省略） |
-| 经典版 QQ 消息管理器 TXT | 一行 `2026-11-17 14:03:00 张三(123456)`，下一行是内容 |
+| 单行 TXT | `[2026-11-17 14:03:00] 张三: 内容` |
+| 经典版 QQ 消息管理器 TXT | `2026-11-17 14:03:00 张三(123456)` + 内容 |
 | 其他纯文本 | 无法按时间筛选时，使用 `--all` 确认处理整份文件 |
 
 CSV 支持逗号、分号和 Tab 分隔。时间可用本地日期和时间、带时区的 ISO 8601 或 10/13 位时间戳。默认识别 UTF-8 和带 BOM 的 UTF-16，GBK 导出可指定 `--encoding gb18030`。
@@ -233,22 +221,19 @@ CSV 支持逗号、分号和 Tab 分隔。时间可用本地日期和时间、�
 ```
 
 ## 常见问题
-> 想修改要处理的群、群类型、关注的信息或回溯时间？见 [自定义常见问题](docs/faq.zh-CN.md)。
+>  [自定义常见问题](docs/faq.zh-CN.md)。
 
 下面是运行时可能遇到的提示及解决方法：
 
-| 看到的提示 | 原因和解决方法 |
+| 提示 | 原因 解决方法 |
 |---|---|
 | `'python' 不是内部或外部命令` / 弹出微软商店 | Python 没装好或没加入 PATH。重新运行 Python 安装程序，选 Modify 并勾选 "Add python.exe to PATH" |
-| `config.json 第 X 行格式有误` | 按提示检查那一行，常见是多了或漏了逗号、用了中文引号 |
 | `没找到导出文件` | 还没导出；或者导出位置不在桌面，需要设置 `export_dir`；或者群号填错了 |
 | `可能需要先重新导出` | 导出文件里没有这段时间的消息，先重新导出 |
 | `401` / `402` | API Key 填错了 / 账户余额不足 |
-| 报告里写"没有筛出有用信息" | 有新消息，但 AI 判断都是闲聊。可以把 `profile` 和 `categories` 写得更具体 |
 | `没有待处理的文本消息` | 窗口内没有可处理文本，或增量模式已经处理过这些消息。可先重新导出或试用 `--hours 72` |
 
 **已知限制**
-- 消息很多时会分批交给 AI，不同批次之间可能出现重复条目
 - `.bat` 只适用于 Windows；macOS/Linux 用 `python3 digest.py --preset daily`
 - AI 可能看漏或理解错，考试时间、截止日期等重要信息请以原消息为准
 
