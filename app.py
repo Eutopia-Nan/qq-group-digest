@@ -36,6 +36,7 @@ VERSION = "2.0.0-dev"
 UI_DIR = Path(__file__).resolve().parent / "ui"
 MAX_JSON_BYTES = 1024 * 1024
 MAX_IMPORT_BYTES = 512 * 1024 * 1024
+IMPORT_LOCK = threading.Lock()  # 导入时"检查同名 → 放入导出目录"必须一起完成
 MAX_JOB_EVENTS = 500
 DRAIN_LIMIT = 16 * 1024 * 1024
 MASK = "••••"
@@ -508,9 +509,11 @@ def make_handler(token, port, jobs):
             export_dir = core.path_from_root(core.text_setting(cfg, "export_dir", "") or core.default_export_dir())
             export_dir.mkdir(parents=True, exist_ok=True)
             target = export_dir / filename
-            if target.exists() and query.get("overwrite", [""])[0] != "1":
+            overwrite = query.get("overwrite", [""])[0] == "1"
+            conflict = HttpError(409, f"导出目录里已经有同名文件 {filename}，要替换它吗？", "overwrite")
+            if target.exists() and not overwrite:
                 # 不悄悄覆盖：让界面问用户"替换吗？"，确认后带 overwrite=1 重新上传
-                raise HttpError(409, f"导出目录里已经有同名文件 {filename}，要替换它吗？", "overwrite")
+                raise conflict
             temp = export_dir / f".{filename}.{uuid.uuid4().hex[:8]}.part"
             self._consumed = True
             try:
@@ -522,7 +525,11 @@ def make_handler(token, port, jobs):
                             raise HttpError(400, "上传中断了，请重试。")
                         stream.write(chunk)
                         remaining -= len(chunk)
-                temp.replace(target)
+                # 上传期间可能有另一个同名文件先落盘：放进去之前在锁里再查一次
+                with IMPORT_LOCK:
+                    if target.exists() and not overwrite:
+                        raise conflict
+                    temp.replace(target)
             finally:
                 temp.unlink(missing_ok=True)
             return {"saved": filename, "sources": core.scan_sources(cfg)}

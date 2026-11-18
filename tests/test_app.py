@@ -315,6 +315,28 @@ class Import(AppTestCase):
         self.assertEqual(target.read_text(encoding="utf-8"), "第二次")
         self.assertEqual([p.name for p in self.exports.iterdir()], ["群_456_技术群.csv"], "不能留下临时文件")
 
+    def test_concurrent_same_name_uploads_conflict(self):
+        """Codex 复核：两个同名新文件同时上传，都通过了开头的检查，后完成的那个不能悄悄覆盖。"""
+        name = urllib.parse.quote("群_456_技术群.csv")
+        first = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        body = "第一份".encode("utf-8")
+        first.putrequest("POST", "/api/import")
+        for key, value in (("Host", f"127.0.0.1:{self.port}"), ("X-Token", self.token), ("X-Filename", name),
+                           ("Content-Type", "application/octet-stream"), ("Content-Length", str(len(body)))):
+            first.putheader(key, value)
+        first.endheaders()
+        first.send(body[:3])  # 第一份只传了一半：已通过开头的检查，正在上传
+        time.sleep(0.3)
+        self.upload("群_456_技术群.csv", "第二份")  # 第二份先完成
+        first.send(body[3:])
+        resp = first.getresponse()
+        data = json.loads(resp.read().decode("utf-8"))
+        first.close()
+        self.assertEqual((resp.status, data["field"]), (409, "overwrite"))
+        target = self.exports / "群_456_技术群.csv"
+        self.assertEqual(target.read_text(encoding="utf-8"), "第二份")
+        self.assertEqual([p.name for p in self.exports.iterdir()], ["群_456_技术群.csv"], "不能留下临时文件")
+
 
     def test_import_rejects_bad_files_and_traversal(self):
         self.upload("群_1_x.exe", "x", expect=400)

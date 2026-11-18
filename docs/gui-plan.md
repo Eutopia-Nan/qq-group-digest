@@ -30,7 +30,7 @@
 | 3. 修改聚焦的信息 | "我的关注点"卡片：个人情况文本框；当前类型的分类标签（× 删除，＋ 添加）；解释程度三档开关（详细 / 简短 / 不要） | `set_profile` / `set_category` / `remove_category` / `set_explain_level` |
 | 4. 回溯时间 | 按钮组：今天 / 本周 / 上次之后 / 自定义（N 天或 N 小时） | `plan` / `run` 的 `window` 参数 |
 
-- **本次选择和长期配置分开**：勾选群、选时间范围只影响这一次运行；点"保存为默认"才会写入配置
+- **本次选择和长期配置分开**：勾选群、选时间范围只影响这一次运行；点"保存为默认"才会写入配置的 `ui_defaults`（见第 4.1 节），下次打开界面时自动恢复这组勾选和时间范围
 - 每次修改**当场生效、当场校验**。出错就在对应控件旁边用中文提示，不弹出技术性的报错
 - **验收**：对每一项，录下新用户的操作，点击次数不超过 2 次（文本输入不算），整个过程不出现 JSON 或命令行
 
@@ -83,12 +83,38 @@ run(cfg, plan, on_progress, cancel) -> RunResult
 #   RunResult = {report_path, sources: [{key, status, items, error}], failures}
 
 test_connection(cfg) -> {ok, model, message}   # 用最小请求验证 Key、模型和余额
-list_reports(cfg) -> list[{path, title, created, size}]
+list_reports(cfg) -> list[{id, path, name, dir, title, created, size}]
 read_report(path) -> str                       # 只允许读取配置的报告目录内的文件
 ```
 
 - 现有的 state 语义（`since_last` 增量、`seen` 去重、`--hours` 和 `--preset` 不推进进度）**保持不变**
 - 费用只显示**预估 token 数和调用次数**。价格可以在配置里填 `price_per_million_tokens`（可选），**不写死价格**，因为模型价格会变
+
+### 4.1 界面默认选择（`ui_defaults`）
+"保存为默认"保存的是**主页上的勾选和时间范围**，写在 config.json 的一个独立字段里：
+
+```json
+"ui_defaults": {
+  "selection": ["group:123456789", "group:987654321"],
+  "window": {"mode": "preset", "name": "daily"}
+}
+```
+
+```python
+get_defaults(cfg) -> {"selection": list[str] | None, "window": Window}
+#   字段缺失时返回 {"selection": None, "window": {"mode": "since_last"}}
+#   selection=None 表示"全部已配置的群"；[] 表示一个都不勾
+#   已不在 groups 里的 key 会被过滤掉，不报错
+#   window 引用的预设已被删除（或不再合法）时，返回 {"mode": "since_last"}；只在读取时回退，不改写 config.json
+set_defaults(cfg_path, selection, window) -> dict   # 同样"读取 → 修改 → 校验 → 原子写入"，返回更新后的配置
+```
+
+- `selection`：`None` 或由 `"group:<群号>"` 组成的列表，不能重复；群号必须已在 `groups` 里，否则抛 `DigestError`
+- `window`：和 `plan()` 的 `window` 格式完全相同，按同样的规则校验（`hours` 不超过 `MAX_HOURS`，`preset` 必须存在）
+- `remove_group` 删除群时，同时把它从 `ui_defaults.selection` 里去掉
+- `validate_config` 检查 `ui_defaults` 的格式；里面引用了已删除的群或预设时只给 warning，不阻止保存
+- **命令行不读 `ui_defaults`**：`python digest.py` 的行为保持不变，只有界面使用这个字段
+- `--file` 模式和拖入文件产生的临时来源不保存为默认
 
 ## 5. HTTP 接口约定（app.py）
 所有接口都以 `/api/` 开头，返回 JSON。出错时返回 `{"error": "中文说明", "field": 可选}`。
@@ -96,7 +122,8 @@ read_report(path) -> str                       # 只允许读取配置的报告�
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/api/status` | 版本、配置是否完整（决定是否进入向导）、当前是否有任务在运行 |
-| GET / PUT | `/api/config` | 读写配置。**返回时 api_key 打码**（只显示后 4 位）；PUT 时如果 Key 字段是打码值，就保留原 Key |
+| GET / PUT | `/api/config` | 读写**完整**配置（设置页用）。**返回时 api_key 打码**（只显示后 4 位）；PUT 时如果 Key 字段是打码值，就保留原 Key。PUT 的规则见下方"完整配置的保护" |
+| PUT | `/api/defaults` | `{selection, window}`，保存主页的默认勾选和时间范围（第 4.1 节）；返回和 `GET /api/config` 相同的视图 |
 | POST | `/api/groups` · DELETE `/api/groups/{id}` · PATCH `/api/groups/{id}` | 添加 / 移除群；修改类型（对应四项操作 1、2） |
 | PUT | `/api/focus` | `{profile?, explain_level?}`（对应操作 3） |
 | PUT · DELETE | `/api/topics/{type}/categories/{name}` | 新增或修改 / 删除分类（对应操作 3） |
@@ -107,9 +134,20 @@ read_report(path) -> str                       # 只允许读取配置的报告�
 | POST | `/api/run` | 开始任务，返回 `{job_id}`。**同一时间只允许一个任务** |
 | GET | `/api/jobs/{id}` | 任务进度，前端每秒轮询一次 |
 | POST | `/api/jobs/{id}/cancel` | 取消任务 |
-| GET | `/api/reports` | 历史报告列表 |
-| GET | `/api/reports/{name}` | 报告原文（Markdown） |
-| POST | `/api/import` | 拖入文件：复制到导出目录 |
+| GET | `/api/reports` | 历史报告列表，每条带 `id`（由完整路径算出，不同文件夹里的同名快报 id 不同） |
+| GET | `/api/reports/{id}` | 报告原文（Markdown）。界面一律用 `id` 打开；按文件名打开只在名字唯一时可用，重名时返回 409 |
+| POST | `/api/import` | 拖入文件：复制到导出目录。已有同名文件时返回 409（`field: "overwrite"`），用户确认替换后带 `?overwrite=1` 重新上传 |
+
+**`GET /api/config` 的返回格式**（`PUT /api/config`、`PUT /api/defaults` 和各项操作接口也返回这个格式）：
+```
+{config: 打码后的完整配置, issues: [Issue], topics: 合并后的类型和分类,
+ explain_level, presets: 合并后的预设, defaults: get_defaults() 的结果}
+```
+
+**完整配置的保护**：`PUT /api/config` 是整体替换，为防止只发了一部分字段就把配置清空：
+1. 请求体必须是对象，且必须包含 `deepseek`、`profile` 和 `groups` 这三项（值可以为空，比如 `"groups": []`，但不能缺少），否则返回 400，配置不改
+2. 请求体里出现 `selection`、`window` 这类不属于配置的顶层字段时返回 400，提示改用 `PUT /api/defaults`。合法的顶层字段包括 `config.example.json` 里的字段、`ui_defaults`、`price_per_million_tokens`，以及当前 config.json 里已经有的字段（这样用户自己手写的字段原样带回去时不会被拒绝）
+3. 主页上的操作一律使用对应的小接口（`/api/groups`、`/api/focus`、`/api/topics`、`/api/defaults`），不调用 `PUT /api/config`
 
 **安全要求（必须做到）**
 1. 只监听 `127.0.0.1`。端口用 0，由系统分配，启动后自动打开浏览器，从此不再有端口冲突
