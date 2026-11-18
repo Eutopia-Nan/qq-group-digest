@@ -174,7 +174,9 @@ All settings live in `config.json`.
 | `open_report` | Open the report automatically when done | `true` |
 | `save_raw` | Keep a plaintext copy during normal runs. A dry run always saves a preview. | `false` |
 
-Built-in topics and presets accept field-level overrides. Add or update individual categories, or use `{}` to clear the built-in categories. A custom preset needs a positive `hours` value unless you provide `--hours` or `--all` on the command line.
+Built-in topics and presets accept field-level overrides. **Your categories are the full list**: whatever you put in `categories` is used as-is, and the built-in categories are no longer merged back in, so deleting a line really deletes that category. If you omit `categories`, the built-in ones are used. `{}` leaves only the automatic "其他有用" (other useful) category.
+
+> ⚠️ Upgrading from an older version: older versions merged your categories with the built-in ones. If you only listed the categories you added, the built-in ones won't appear any more after upgrading. Copy the ones you want to keep from `config.example.json`. A custom preset needs a positive `hours` value unless you provide `--hours` or `--all` on the command line.
 
 The first successful incremental run after upgrading converts `state.json` to track individual messages. It may include some recent messages again because the old format only saved run times. `--hours`, the daily and weekly presets, and `--all` leave incremental progress unchanged.
 
@@ -207,11 +209,13 @@ CSV supports comma, semicolon and Tab delimiters. Timestamps can be local date-t
 
 ## Project Structure
 ```
-├── digest.py                 # main program
+├── digest.py                 # command-line entry (argument parsing, progress output)
+├── digest_core.py            # core logic: reading, filtering, AI calls, reports
 ├── config.example.json       # config template (copy to config.json)
 ├── 1_今日快报_24小时.bat      # daily digest launcher (Windows)
 ├── 2_今周快报_一周.bat        # weekly digest launcher (Windows)
-├── docs/                     # images for docs
+├── docs/                     # docs, FAQ and images
+├── tests/                    # automated tests
 ├── reports/                  # generated reports (git-ignored)
 ├── raw/                      # dry-run previews and optional plaintext copies (git-ignored)
 └── state.json                # incremental progress (git-ignored)
