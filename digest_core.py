@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -27,7 +28,8 @@ import uuid
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-ROOT = Path(__file__).resolve().parent
+# 打包成 exe 后，config.json、报告等放在 exe 所在文件夹（便携），而不是解包出来的程序文件夹
+ROOT = Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve().parent
 CONFIG_PATH = ROOT / "config.json"
 STATE_PATH = ROOT / "state.json"
 REPORT_DIR = ROOT / "reports"

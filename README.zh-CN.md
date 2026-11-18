@@ -5,13 +5,14 @@
 > 用 AI 从 QQ 群聊记录里筛出对你有用的信息，自动生成每日/每周快报。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.0.0-green)
+![Version](https://img.shields.io/badge/version-2.0.0-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
 ![demo](docs/demo.svg)
 
 ## 目录
 - [功能特性](#功能特性)
+- [图形界面版（Windows）](#图形界面版windows)
 - [两种上手方式](#两种上手方式)
 - [快速开始](#快速开始)
 - [使用方法](#使用方法)
@@ -27,6 +28,32 @@
 - 从 QQ 群聊记录中筛选考试通知、学习资料、实习兼职等信息，按需设置关注内容。
 - 解释相关术语。
 - 生成每日或每周 Markdown 快报，附原文摘录和消息时间。
+
+## 图形界面版（Windows）
+
+不想碰命令行和 JSON，可以用图形界面版。**不需要安装 Python**，下载解压就能用。
+
+1. 到 [Releases 页面](https://github.com/Eutopia-Nan/qq-group-digest/releases) 下载 `qq-group-digest-v2.0.0-windows.zip`，解压到一个好找的位置，比如 `D:\qq-group-digest`。不要放在 `C:\Program Files` 里，那里普通程序没有写入权限。
+2. 双击 `qq-group-digest.exe`。程序没有数字签名，Windows 可能提示"已保护你的电脑"，点 **更多信息 → 仍要运行**。
+3. 第一次打开会弹出 **首次设置**：填写 AI 接口地址、模型和 API Key，可以先点 **测试连接**。导出目录填 QQ 聊天记录导出的文件夹，留空则使用桌面的 `QQ聊天记录导出`。
+4. 导出群聊记录（方法见[第 2 步](#第-2-步导出群聊记录)），点主页的 **导入 CSV / TXT** 或直接把文件拖进去。导出目录里发现的新群会列在"发现的导出文件"里，点 **＋ 添加**。
+
+主页上可以直接完成常用的修改，不用进设置：
+
+| 想做的事 | 在主页上怎么做 |
+|---|---|
+| 换要整理的群 | 勾选或取消勾选；**＋ 添加** 新群；**移除** 不要的群 |
+| 改群的类型 | 群名旁边的下拉框，改完自动保存 |
+| 改关注的信息 | "我的关注点"卡片：个人情况、分类标签（× 删除，＋ 添加）、术语解释的详细程度 |
+| 改回溯时间 | 最近 24 小时 / 最近 7 天 / 上次之后 / 自定义 / 全部历史 |
+
+点 **保存为默认**，下次打开会恢复这次勾选的群和时间范围。右侧会显示预估的消息数、调用次数和 Token，确认后点 **生成快报**，生成过程中可以取消。生成的快报在顶部的 **快报** 页查看。
+
+**文件保存在哪里**：配置 `config.json`、快报 `reports\` 和处理进度 `state.json` 都在 exe 所在的文件夹里。升级到新版本时，把这几样复制到新版本的文件夹即可。命令行版的 `config.json` 也可以直接复制过来用。
+
+**没有弹出独立窗口？** 窗口依赖 Windows 自带的 WebView2，Windows 10/11 一般已经装好。如果没有，程序会改用浏览器打开，并弹出一个提示框，用完点"确定"退出。想要独立窗口，可以安装 [WebView2 运行时](https://developer.microsoft.com/microsoft-edge/webview2/)。
+
+**用源码运行界面**：双击 `启动界面.bat`，会在浏览器中打开同样的界面（需要 Python，不需要额外安装依赖）。如果装了 `pip install pywebview`，运行 `python desktop.py` 可以打开独立窗口。
 
 ## 两种上手方式
 
@@ -215,6 +242,11 @@ CSV 支持逗号、分号和 Tab 分隔。时间可用本地日期和时间、�
 ```
 ├── digest.py                 # 命令行入口（解析参数、打印进度）
 ├── digest_core.py            # 核心逻辑：读取、筛选、调用 AI、生成报告
+├── app.py                    # 图形界面的本地服务（只监听本机）
+├── desktop.py                # 图形界面入口：打开独立窗口，失败时改用浏览器
+├── ui/                       # 图形界面的网页文件
+├── 启动界面.bat               # 源码版双击打开图形界面
+├── build/build_exe.py        # 打包 exe 的脚本（开发者用）
 ├── config.example.json       # 配置模板（复制为 config.json 后填写）
 ├── 1_今日快报_24小时.bat      # 双击生成今日快报
 ├── 2_今周快报_一周.bat        # 双击生成今周快报
