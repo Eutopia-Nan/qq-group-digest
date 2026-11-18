@@ -55,7 +55,7 @@ Everyday changes happen right on the home page, with no settings page involved:
 
 Click **Save as default** to restore the same groups and time range next time. The estimate panel shows the message count, number of AI calls and tokens. Click **Generate digest** to run; you can cancel while it runs. Read the results on the **Digests** page at the top.
 
-**Where your files live**: `config.json`, the `reports\` folder and `state.json` are all stored next to the exe. To upgrade, copy them into the new version's folder. A `config.json` from the command-line version works as-is.
+**Where your files live**: `config.json` and `state.json` are stored next to the exe. Digests go to a `reports\` folder next to the exe **by default**; if you changed the report folder in settings, or gave a preset its own folder in `presets`, they are saved there instead. To upgrade, copy `config.json`, `state.json` and `reports\` (if present) into the new version's folder. Report folders outside the exe folder can stay where they are; the new version keeps using them. A `config.json` from the command-line version works as-is.
 
 **No separate window?** The window uses Microsoft WebView2, which Windows 10/11 usually already has. Without it, the app opens in your browser and shows a small dialog; click OK in that dialog when you're done to quit. To get the separate window, install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
