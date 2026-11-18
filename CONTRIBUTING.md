@@ -29,7 +29,7 @@
 ```bat
 python -m venv .venv
 .venv\Scripts\python -m pip install pywebview pyinstaller
-.venv\Scripts\python builduild_exe.py
+.venv\Scripts\python build\build_exe.py
 ```
 结果在 `dist/qq-group-digest/`，压缩包为 `dist/qq-group-digest-v<版本>-windows.zip`。
 The output goes to `dist/qq-group-digest/`, plus a zip at `dist/qq-group-digest-v<version>-windows.zip`.
