@@ -105,6 +105,7 @@ get_defaults(cfg) -> {"selection": list[str] | None, "window": Window}
 #   字段缺失时返回 {"selection": None, "window": {"mode": "since_last"}}
 #   selection=None 表示"全部已配置的群"；[] 表示一个都不勾
 #   已不在 groups 里的 key 会被过滤掉，不报错
+#   window 引用的预设已被删除（或不再合法）时，返回 {"mode": "since_last"}；只在读取时回退，不改写 config.json
 set_defaults(cfg_path, selection, window) -> dict   # 同样"读取 → 修改 → 校验 → 原子写入"，返回更新后的配置
 ```
 
