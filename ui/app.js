@@ -1,7 +1,6 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const request = window.demoRequest;
-  const formats = { daily: "最近 24 小时", weekly: "最近 7 天" };
+  let token;
   let config;
   let sources = [];
   let selection = new Set();
@@ -10,9 +9,52 @@
   let currentPlan;
   let estimateVersion = 0;
   let activeJob;
+  let starting = false;
   let pollTimer;
+  let jobCursor = 0;
+  let cancelling = false;
+  let jobMessage = "";
+  let pendingImports = [];
   let activeReport;
   let reportVersion = 0;
+
+  function loadToken() {
+    const url = new URL(location.href);
+    const key = "qq-group-digest-token";
+    const supplied = url.searchParams.get("token");
+    try {
+      if (supplied) sessionStorage.setItem(key, supplied);
+      return supplied || sessionStorage.getItem(key);
+    } catch { return supplied; }
+    finally {
+      if (supplied) {
+        url.searchParams.delete("token");
+        history.replaceState(null, "", url);
+      }
+    }
+  }
+
+  async function request(method, path, data, file) {
+    if (!token) throw new Error("请用启动窗口显示的本机网址打开页面。");
+    const headers = { "X-Token": token };
+    let body;
+    if (file) {
+      headers["Content-Type"] = "application/octet-stream";
+      headers["X-Filename"] = encodeURIComponent(file.name);
+      body = file;
+    } else if (data !== undefined) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(data);
+    }
+    let response;
+    try { response = await fetch(path, { method, headers, body, cache: "no-store", redirect: "error" }); }
+    catch { throw new Error("无法连接本机服务，请确认启动窗口仍在运行。"); }
+    const result = await response.json().catch(() => null);
+    if (response.status === 401 || response.status === 403) throw new Error("本机访问授权已失效，请重新打开启动窗口显示的网址。");
+    if (!response.ok) throw Object.assign(new Error(result?.error || `本机服务返回错误（${response.status}）。`), { field: result?.field });
+    if (!result) throw new Error("本机服务返回了无法识别的数据。");
+    return result;
+  }
 
   function node(tag, text, className) {
     const element = document.createElement(tag);
@@ -44,10 +86,10 @@
     select.value = selected;
   }
 
-  async function loadSources() {
-    sources = await request("GET", "/api/sources");
+  async function loadSources(selectAll = false) {
+    ({ sources } = await request("GET", "/api/sources"));
     const available = new Set(sources.filter(source => source.configured && source.status === "ok").map(source => source.key));
-    selection = new Set([...selection].filter(key => available.has(key)));
+    selection = selectAll ? available : new Set([...selection].filter(key => available.has(key)));
     renderSources();
     await estimate();
   }
@@ -95,16 +137,19 @@
       topicOptions(select, source.type);
       select.addEventListener("change", () => perform(status, async () => {
         const previous = source.type;
-        try { await request("PATCH", `/api/groups/${source.group_id}`, { type: select.value }); }
+        const next = select.value;
+        select.disabled = true;
+        try { config = await request("PATCH", `/api/groups/${encodeURIComponent(source.group_id)}`, { type: next }); }
         catch (error) { select.value = previous; throw error; }
-        source.type = select.value;
-        topic = select.value;
+        finally { select.disabled = false; }
+        source.type = next;
+        topic = next;
         renderFocus();
         message(status, "已保存。");
         await estimate();
       }));
       const remove = button("移除", () => perform(status, async () => {
-        await request("DELETE", `/api/groups/${source.group_id}`);
+        config = await request("DELETE", `/api/groups/${encodeURIComponent(source.group_id)}`);
         await loadSources();
         message($("source-message"), `已移除「${source.name}」。`);
       }));
@@ -112,7 +157,7 @@
       row.append(label, select, remove);
     } else {
       const add = button("＋ 添加", () => perform(status, async () => {
-        await request("POST", "/api/groups", { id: source.group_id, name: source.name, type: topic });
+        config = await request("POST", "/api/groups", { group_id: source.group_id, name: source.name, type: topic });
         selection.add(source.key);
         await loadSources();
         message($("source-message"), `已添加「${source.name}」。`);
@@ -171,12 +216,16 @@
     for (const control of $("windows").querySelectorAll("button")) {
       const name = control.dataset.window;
       control.setAttribute("aria-pressed", String(name === windowChoice));
-      if (formats[name]) control.textContent = formats[name];
+      const hours = config.presets?.[name]?.hours;
+      if (Number(hours) > 0) {
+        const days = Number(hours) / 24;
+        control.textContent = days > 1 && Number.isInteger(days) ? `最近 ${days} 天` : `最近 ${hours} 小时`;
+      }
     }
   }
 
   function setRunEnabled() {
-    $("run").disabled = Boolean(activeJob) || !(currentPlan?.total_batches > 0);
+    $("run").disabled = starting || Boolean(activeJob) || !(currentPlan?.total_batches > 0);
   }
 
   async function estimate() {
@@ -186,13 +235,24 @@
     message($("window-message"));
     message($("estimate-message"));
     for (const name of ["messages", "batches", "tokens"]) $(`estimate-${name}`).textContent = "—";
+    if (!selection.size) {
+      message($("estimate-message"), "请至少选择一个有导出文件的群。");
+      return;
+    }
+    const window = readWindow();
+    if (window.mode === "hours" && !(window.hours > 0 && window.hours <= 100000)) {
+      message($("window-message"), "请输入大于 0 且不超过 100000 小时的时长。", true);
+      return;
+    }
     try {
-      const plan = await request("POST", "/api/plan", { selection: [...selection], window: readWindow() });
+      const plan = await request("POST", "/api/plan", { selection: [...selection], window });
       if (version !== estimateVersion) return;
       currentPlan = plan;
       $("estimate-messages").textContent = plan.sources.reduce((total, row) => total + row.pending, 0).toLocaleString("zh-CN");
       $("estimate-batches").textContent = plan.total_batches.toLocaleString("zh-CN");
       $("estimate-tokens").textContent = plan.est_tokens.toLocaleString("zh-CN");
+      const warnings = plan.sources.flatMap(row => [row.error, ...(row.warnings || [])].filter(Boolean).map(note => `${row.name}：${note}`));
+      if (warnings.length) message($("estimate-message"), warnings.join("；"), plan.sources.some(row => row.error));
     } catch (error) {
       if (version !== estimateVersion) return;
       const target = error.field === "window" ? $("window-message") : $("estimate-message");
@@ -201,29 +261,64 @@
     setRunEnabled();
   }
 
+  function showNextImport() {
+    $("import-group").hidden = !pendingImports.length;
+    if (!pendingImports.length) return;
+    const file = pendingImports[0];
+    $("import-group").reset();
+    $("import-group-name").value = file.name.replace(/\.[^.]+$/, "").slice(0, 60);
+    message($("source-message"), `请为「${file.name}」填写群号。`);
+    $("import-group-id").focus();
+  }
+
   async function importFiles(files) {
-    message($("source-message"));
     let added = 0;
     const errors = [];
     for (const file of files) {
-      try { await request("POST", "/api/import", { name: file.name, size: file.size }); added++; }
-      catch (error) { errors.push(error.message); }
+      if (!/\.(csv|txt)$/i.test(file.name) || !file.size) {
+        errors.push(`「${file.name}」须为非空的 CSV 或 TXT。`);
+        continue;
+      }
+      if (!/^群_\d+_.*\.(csv|txt)$/i.test(file.name)) {
+        pendingImports.push(file);
+        continue;
+      }
+      try { await request("POST", "/api/import", undefined, file); added++; }
+      catch (error) {
+        if (error.field === "group_id") pendingImports.push(file);
+        else errors.push(error.message);
+      }
     }
-    await loadSources();
-    message($("source-message"), [added ? `已模拟导入 ${added} 个文件。` : "", ...new Set(errors)].filter(Boolean).join(" "), Boolean(errors.length));
+    if (added) await loadSources();
+    message($("source-message"), [added ? `已导入 ${added} 个文件。` : "", ...new Set(errors)].filter(Boolean).join(" "), Boolean(errors.length));
+    showNextImport();
   }
 
   function showJob(job) {
     $("job").hidden = false;
-    $("job-status").textContent = job.message;
-    $("progress").max = job.total_batches || 1;
-    $("progress").value = job.batch || 0;
+    jobCursor = job.next_event ?? jobCursor;
+    const { batches_started: started = 0, total_batches: total = 0 } = job.progress || {};
+    const reportPath = job.result?.report_path;
+    const last = job.events?.at(-1)?.message?.trim();
+    if (last) jobMessage = last;
+    if (job.status === "running") {
+      $("job-status").textContent = cancelling ? "正在取消，等待当前请求结束…" :
+        (total && started ? `已开始 ${started} / ${total} 批` : jobMessage || "正在准备消息…");
+    } else if (job.status === "cancelled") $("job-status").textContent = reportPath ? "已取消，部分结果已保存。" : "任务已取消。";
+    else if (job.status === "failed") $("job-status").textContent = job.error || "生成失败。";
+    else if (job.result?.failures?.length && reportPath) $("job-status").textContent = "快报已生成，部分群处理失败，详情见快报。";
+    else $("job-status").textContent = reportPath ? "快报已生成。" : jobMessage || "没有生成新快报。";
+    $("progress").max = total || 1;
+    if (total) $("progress").value = job.status === "done" ? total : Math.min(started, total);
+    else $("progress").removeAttribute("value");
     $("cancel").hidden = job.status !== "running";
-    $("job-report").hidden = !job.report_path;
+    $("cancel").disabled = cancelling;
+    $("job-report").hidden = !reportPath;
     if (job.status === "running") return;
     clearTimeout(pollTimer);
     activeJob = undefined;
-    if (job.report_path) activeReport = job.report_path;
+    cancelling = false;
+    if (reportPath) activeReport = reportPath;
     setRunEnabled();
     if (location.hash === "#reports") perform($("global-message"), loadReports);
   }
@@ -232,12 +327,14 @@
     const id = activeJob;
     if (!id) return;
     try {
-      const job = await request("GET", `/api/jobs/${id}`);
+      const job = await request("GET", `/api/jobs/${encodeURIComponent(id)}?since=${jobCursor}`);
       if (id !== activeJob) return;
+      message($("estimate-message"));
       showJob(job);
       if (activeJob) pollTimer = setTimeout(poll, 1000);
     } catch (error) {
-      showJob({ status: "failed", message: error.message });
+      message($("estimate-message"), error.message, true);
+      if (activeJob === id) pollTimer = setTimeout(poll, 2000);
     }
   }
 
@@ -301,7 +398,7 @@
   }
 
   async function loadReports() {
-    const reports = await request("GET", "/api/reports");
+    const { reports } = await request("GET", "/api/reports");
     $("report-list").replaceChildren(...reports.map(report => {
       const item = button(report.title, () => perform($("global-message"), () => showReport(report.path)), "history-button");
       const date = new Date(report.created * 1000).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
@@ -312,6 +409,45 @@
     const report = reports.find(entry => entry.path === activeReport) || reports[0];
     if (report) await showReport(report.path);
     else $("report-content").replaceChildren(node("p", "还没有生成快报。"));
+  }
+
+  function editSettings(firstRun = false) {
+    const current = config.config;
+    $("setup-note").hidden = !firstRun;
+    $("settings-title").textContent = firstRun ? "首次设置" : "设置";
+    $("api-url").value = current.deepseek?.base_url || "https://api.deepseek.com";
+    $("api-model").value = current.deepseek?.model || "deepseek-flash";
+    $("api-key").value = "";
+    $("export-dir").value = current.export_dir || "";
+    $("report-dir").value = current.report_dir || "";
+    $("daily-hours").value = config.presets?.daily?.hours ?? 24;
+    $("weekly-hours").value = config.presets?.weekly?.hours ?? 168;
+    $("save-raw").checked = current.save_raw === true;
+    message($("settings-message"));
+    $("settings").showModal();
+  }
+
+  async function settingsConfig() {
+    // Config replacement requires the complete current document, including fields the UI doesn't edit.
+    const { config: latest } = await request("GET", "/api/config");
+    const hours = { daily: $("daily-hours").valueAsNumber, weekly: $("weekly-hours").valueAsNumber };
+    if (Object.values(hours).some(value => !(value > 0 && value <= 100000))) {
+      throw new Error("快报小时数应大于 0 且不超过 100000。");
+    }
+    const key = $("api-key").value.trim();
+    const baseUrl = $("api-url").value.trim();
+    const { api_key: oldKey, ...provider } = latest.deepseek || {};
+    const savedUrl = provider.base_url || "https://api.deepseek.com";
+    const keepKey = baseUrl.replace(/\/+$/, "") === savedUrl.replace(/\/+$/, "");
+    const apiKey = key || (keepKey ? oldKey : undefined);
+    return { ...latest, groups: latest.groups ?? [], deepseek: {
+      ...provider, base_url: baseUrl, model: $("api-model").value.trim(),
+      ...(apiKey !== undefined ? { api_key: apiKey } : {}),
+    }, export_dir: $("export-dir").value.trim(), report_dir: $("report-dir").value.trim(),
+    save_raw: $("save-raw").checked, presets: {
+      ...latest.presets, daily: { ...latest.presets?.daily, hours: hours.daily },
+      weekly: { ...latest.presets?.weekly, hours: hours.weekly },
+    } };
   }
 
   function navigate() {
@@ -326,6 +462,36 @@
 
   function bindControls() {
     window.addEventListener("hashchange", navigate);
+    $("open-settings").addEventListener("click", () => editSettings());
+    $("close-settings").addEventListener("click", () => $("settings").close());
+    $("settings-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const submission = event.submitter;
+      submission.disabled = true;
+      perform($("settings-message"), async () => {
+        try {
+          config = await request("PUT", "/api/config", await settingsConfig());
+          $("settings-form").reset();
+          $("settings").close();
+          renderWindow();
+          renderFocus();
+          await loadSources();
+          if (location.hash === "#reports") await loadReports();
+          else message($("source-message"), "设置已保存。可在此导入并添加群聊。");
+        } finally { submission.disabled = false; }
+      });
+    });
+    $("test-connection").addEventListener("click", () => {
+      if (!$("settings-form").reportValidity()) return;
+      $("test-connection").disabled = true;
+      message($("settings-message"), "正在测试连接…");
+      perform($("settings-message"), async () => {
+        try {
+          const result = await request("POST", "/api/test-connection", await settingsConfig());
+          message($("settings-message"), result.message, !result.ok);
+        } finally { $("test-connection").disabled = false; }
+      });
+    });
     $("import-input").addEventListener("change", event => {
       perform($("source-message"), () => importFiles([...event.target.files]));
       event.target.value = "";
@@ -338,10 +504,32 @@
       drop.classList.remove("dragging");
       perform($("source-message"), () => importFiles([...event.dataTransfer.files]));
     });
+    $("cancel-import").addEventListener("click", () => {
+      pendingImports.shift();
+      message($("source-message"), "已跳过该文件。");
+      showNextImport();
+    });
+    $("import-group").addEventListener("submit", event => {
+      event.preventDefault();
+      const file = pendingImports[0];
+      if (!file) return;
+      const query = new URLSearchParams({ group_id: $("import-group-id").value.trim(), name: $("import-group-name").value.trim() });
+      const submit = event.submitter;
+      submit.disabled = true;
+      perform($("source-message"), async () => {
+        try {
+          const result = await request("POST", `/api/import?${query}`, undefined, file);
+          pendingImports.shift();
+          await loadSources();
+          message($("source-message"), `已导入「${result.saved}」。`);
+          showNextImport();
+        } finally { submit.disabled = false; }
+      });
+    });
     $("profile").addEventListener("change", () => perform($("profile-message"), async () => {
       const updated = await request("PUT", "/api/focus", { profile: $("profile").value });
-      config.profile = updated.profile;
-      $("profile").value = updated.profile;
+      config = updated;
+      $("profile").value = updated.config.profile || "";
       message($("profile-message"), "已保存。");
     }));
     $("topic").addEventListener("change", event => {
@@ -369,7 +557,7 @@
       if (!level) return;
       perform($("explain-message"), async () => {
         const updated = await request("PUT", "/api/focus", { explain_level: level });
-        config.explain_level = updated.explain_level;
+        config = updated;
         renderFocus();
         message($("explain-message"), "已保存。");
       });
@@ -383,36 +571,45 @@
     });
     $("custom-window").addEventListener("submit", event => event.preventDefault());
     $("custom-window").addEventListener("input", estimate);
-    $("save-default").addEventListener("click", () => perform($("window-message"), async () => {
-      await request("PUT", "/api/config", { selection: [...selection], window: readWindow() });
-      message($("window-message"), "已保存本次群聊选择和时间范围为默认。");
-    }));
     $("run").addEventListener("click", () => perform($("estimate-message"), async () => {
-      if (!currentPlan || activeJob) return;
-      $("run").disabled = true;
+      if (!currentPlan || activeJob || starting) return;
+      starting = true;
+      setRunEnabled();
       try {
         const { job_id } = await request("POST", "/api/run", { selection: currentPlan.selection, window: currentPlan.window });
         activeJob = job_id;
+        jobCursor = 0;
+        jobMessage = "";
         await poll();
-      } finally { setRunEnabled(); }
+      } finally { starting = false; setRunEnabled(); }
     }));
     $("cancel").addEventListener("click", () => perform($("estimate-message"), async () => {
-      if (!activeJob) return;
-      showJob(await request("POST", `/api/jobs/${activeJob}/cancel`));
+      if (!activeJob || cancelling) return;
+      const id = activeJob;
+      $("cancel").disabled = true;
+      try {
+        await request("POST", `/api/jobs/${encodeURIComponent(id)}/cancel`);
+        if (activeJob === id) {
+          cancelling = true;
+          $("job-status").textContent = "正在取消，等待当前请求结束…";
+        }
+      } finally { $("cancel").disabled = cancelling; }
     }));
   }
 
   perform($("global-message"), async () => {
+    token = loadToken();
+    const status = await request("GET", "/api/status");
     config = await request("GET", "/api/config");
     topic = Object.hasOwn(config.topics, topic) ? topic : Object.keys(config.topics)[0];
-    selection = new Set(config.selection);
-    windowChoice = config.window.name || (config.window.mode === "hours" ? "custom" : config.window.mode);
-    if (windowChoice === "custom") $("window-value").value = config.window.hours;
-    $("profile").value = config.profile;
+    $("profile").value = config.config.profile || "";
+    activeJob = status.running_job || undefined;
     renderFocus();
     renderWindow();
     bindControls();
-    await loadSources();
+    await loadSources(true);
     navigate();
+    if (activeJob) await poll();
+    if (!status.config_exists) editSettings(true);
   });
 })();

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light">
   <title>QQ群聊整理</title>
   <link rel="stylesheet" href="style.css">
-  <script src="mock-api.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -17,7 +17,7 @@
         <a href="#home" id="home-link">主页</a>
         <a href="#reports" id="reports-link">快报</a>
       </nav>
-      <span class="demo-mode">演示模式</span>
+      <button type="button" class="button settings-button" id="open-settings">设置</button>
     </div>
   </header>
   <main class="shell">
@@ -35,6 +35,12 @@
               <label class="button" id="import-zone">导入 CSV / TXT<input type="file" id="import-input" accept=".csv,.txt" multiple></label>
             </div>
             <p id="source-message" class="field-message" role="status" hidden></p>
+            <form id="import-group" class="category-form" hidden>
+              <label>群号<input id="import-group-id" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label>群名<input id="import-group-name" maxlength="60"></label>
+              <button type="submit" class="button primary-button">导入到此群</button>
+              <button type="button" class="button" id="cancel-import">取消</button>
+            </form>
             <div id="groups"></div>
             <div id="discovered" class="discovered" hidden><h3>发现的导出文件</h3><div id="discovered-list"></div></div>
           </section>
@@ -82,7 +88,6 @@
               </div>
             </form>
             <p id="window-message" class="field-message" role="status" hidden></p>
-            <button type="button" id="save-default" class="text-button">保存为默认</button>
           </section>
           <section class="card estimate" aria-labelledby="estimate-title">
             <h2 id="estimate-title">处理预估</h2>
@@ -95,7 +100,7 @@
             <button type="button" id="run" class="button primary-button run-button" disabled>生成快报</button>
             <div id="job" class="job" hidden>
               <div class="job-head"><span id="job-status" role="status"></span><button type="button" id="cancel" class="text-button">取消</button></div>
-              <progress id="progress" value="0" max="1" aria-label="快报生成进度"></progress>
+              <progress id="progress" max="1" aria-label="已开始的分析批次"></progress>
               <a id="job-report" class="text-button" href="#reports" hidden>查看快报 →</a>
             </div>
           </section>
@@ -115,5 +120,23 @@
       </div>
     </section>
   </main>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <form id="settings-form">
+      <div class="card-head"><h2 id="settings-title">设置</h2><button type="button" id="close-settings" class="text-button">关闭</button></div>
+      <p id="setup-note" class="field-message" hidden>先填 AI 服务，再导入群聊文件、添加群，回到主页生成快报。</p>
+      <label class="field-label" for="api-url">AI 接口地址</label><input id="api-url" type="url" required>
+      <label class="field-label" for="api-model">模型</label><input id="api-model" required>
+      <label class="field-label" for="api-key">API Key</label><input id="api-key" type="password" placeholder="地址不变时，留空保留已有密钥" autocomplete="new-password">
+      <label class="field-label" for="export-dir">导出目录</label><input id="export-dir" placeholder="留空使用桌面的 QQ 聊天记录导出目录">
+      <label class="field-label" for="report-dir">报告目录</label><input id="report-dir" placeholder="留空使用 reports">
+      <div class="settings-actions">
+        <label>今日快报（小时）<input id="daily-hours" type="number" min="0" max="100000" step="any" required></label>
+        <label>今周快报（小时）<input id="weekly-hours" type="number" min="0" max="100000" step="any" required></label>
+      </div>
+      <label class="settings-check"><input id="save-raw" type="checkbox">保留处理后的聊天原文</label>
+      <p id="settings-message" class="field-message" role="status" hidden></p>
+      <div class="settings-actions"><button type="submit" class="button primary-button">保存设置</button><button type="button" class="button" id="test-connection">测试连接</button></div>
+    </form>
+  </dialog>
 </body>
 </html>
