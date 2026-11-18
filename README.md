@@ -12,6 +12,7 @@
 
 ## Table of Contents
 - [Features](#features)
+- [Two Ways to Get Started](#two-ways-to-get-started)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -32,6 +33,50 @@
 - 📦 **Zero dependencies**: Python standard library only.
 
 > The prompts and reports are in Chinese, since the tool is built for Chinese-language QQ groups.
+
+## Two Ways to Get Started
+
+| | Best for | How |
+|---|---|---|
+| **Option A: Do it yourself** | You want to understand each step | Follow [Quick Start](#quick-start) and [Usage](#usage) below (about 10 minutes) |
+| **Option B: Let an AI agent set it up** | You have an AI assistant that can run commands on your computer (Claude Code, Codex, Cursor, etc.) | Copy the prompt below and send it to the agent. It will ask you questions and do the setup. |
+
+<details>
+<summary><b>Option B: prompt to send to your agent</b> (click to expand)</summary>
+
+```text
+Please install and configure the open-source project qq-group-digest on this computer:
+https://github.com/Eutopia-Nan/qq-group-digest
+
+It reads QQ group chat files that I export myself, uses AI to pick out what's useful to me, and produces daily/weekly digests.
+First read README.md (or README.zh-CN.md) and config.example.json in the repo, then follow the steps below.
+Talk to me in my language, ask one question at a time, explain things plainly, and don't assume I can code.
+
+[Steps]
+1. Check that Python >= 3.8 is installed. If not, tell me how to install it (on Windows, tick "Add python.exe to PATH"). Don't install it silently for me.
+2. Ask me which folder to put the project in, then download it or git clone it there.
+3. Run the self-check: python digest.py --file examples/study.csv --type study --all --dry-run and confirm it works.
+4. Copy config.example.json to config.json, then ask me about each item and fill it in:
+   - AI provider: DeepSeek (needs an API key and a topped-up balance at platform.deepseek.com), another OpenAI-compatible endpoint, or a local model such as Ollama.
+   - profile: ask about my role, major or year, skill level, and what I most want from these groups (exam notices, gigs, internships, tech news…). Write it up as one paragraph.
+   - groups: which groups to process, and each group's ID and purpose.
+   - topics: design categories for each group's purpose. Reuse the built-in study / opensource types where they fit; otherwise create a new type and confirm the categories with me.
+   - explain_style: whether I want jargon explained, and in how much detail.
+   - export_dir: where my exported chat files are.
+   After every edit, verify that config.json is valid JSON.
+5. In the export folder, check by file name (群_<groupId>_*.csv / *.txt) that every group has an export file, and tell me which are missing.
+6. Run python digest.py --preset daily --dry-run and summarize the result for me in a sentence or two.
+7. Tell me the daily routine: re-export the chats first, then double-click 1_今日快报_24小时.bat or 2_今周快报_一周.bat.
+
+[Rules you must follow]
+- Write the API key only into the local config.json. Never show it in full in your replies, and never commit or upload it anywhere. config.json is in .gitignore; keep it that way.
+- This project only processes files that have already been exported. Do not read or decrypt QQ's databases or process memory yourself. Do not download, install or run any third-party export tool unless I explicitly agree. If I have no export files yet, just explain my options and their risks and let me decide.
+- Do not open or repeat the contents of my chats. When checking export files, look only at file names, sizes and modification times.
+- Real AI calls cost money. Until I explicitly agree, only run commands with --dry-run.
+- Do not modify digest.py. If something fails, show me the exact error and your diagnosis first.
+```
+
+</details>
 
 ## Quick Start
 
