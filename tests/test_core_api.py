@@ -286,5 +286,86 @@ class Connection(CoreTestCase):
         self.assertFalse(self.calls)
 
 
+class ReviewRegressions(CoreTestCase):
+    """Codex 审查阶段 1 时复现的 4 个问题。"""
+
+    def test_cancel_keeps_batches_already_paid_for(self):
+        """P1：单群分两批，第一批返回后取消 → 报告保留第一批，进度不推进。"""
+        with (self.exports / "群_123_学习群.csv").open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(("时间", "发送者", "内容"))
+            writer.writerow(("2027-01-01 11:00", "甲", "测" * 45000))
+        cfg = core.load_config()
+        cancel = threading.Event()
+        outcome = core.run(cfg, core.plan(cfg), lambda e: cancel.set() if e["stage"] == "batch" else None, cancel)
+        self.assertEqual(len(self.calls), 1)
+        self.assertTrue(outcome["cancelled"])
+        self.assertEqual((outcome["sources"][0]["status"], outcome["sources"][0]["items"]), ("partial", 1))
+        report = Path(outcome["report_path"]).read_text(encoding="utf-8")
+        self.assertIn("#### ★★★★ 标题", report)
+        self.assertIn("只分析了部分消息", report)
+        self.assertFalse((self.root / "state.json").exists())
+
+    def test_huge_lookback_rejected_on_save(self):
+        """P2：超大回溯值不能写进配置。"""
+        before = self.config.read_bytes()
+        for hours in (1e308, core.MAX_HOURS + 1):
+            with self.assertRaises(core.DigestError):
+                core.set_preset_hours(None, "daily", hours)
+        self.assertEqual(self.config.read_bytes(), before)
+        with self.assertRaises(core.DigestError):
+            core.plan(core.load_config(), None, {"mode": "hours", "hours": 1e308})
+        cfg = core.load_config()
+        cfg["presets"] = {"daily": {"hours": 1e308}}
+        self.assertTrue(any(i["field"] == "presets" for i in core.validate_config(cfg)))
+        core.set_preset_hours(None, "daily", core.MAX_HOURS)
+
+    def test_wrong_argument_types_raise_digest_error(self):
+        """P2：非法类型统一抛 DigestError，且不改写 config.json。"""
+        before = self.config.read_bytes()
+        bad_calls = (
+            lambda: core.add_group(None, 456, 42, "study"),
+            lambda: core.add_group(None, 456, "x", None),
+            lambda: core.add_group(None, 4.5, "x", "study"),
+            lambda: core.add_group(None, True, "x", "study"),
+            lambda: core.set_group_type(None, 123, []),
+            lambda: core.set_group_type(None, [123], "study"),
+            lambda: core.set_profile(None, None),
+            lambda: core.set_category(None, "study", 1, "x"),
+            lambda: core.set_category(None, {}, "x", "x"),
+            lambda: core.set_category(None, "study", "x", None),
+            lambda: core.remove_category(None, "study", ["x"]),
+            lambda: core.set_explain_level(None, ["off"]),
+            lambda: core.set_preset_hours(None, ["daily"], 24),
+        )
+        for call in bad_calls:
+            with self.assertRaises(core.DigestError):
+                call()
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_concurrent_saves_keep_both_changes(self):
+        """P2：两个修改同时读到同一份配置再保存，两项改动都要保留。"""
+        original = core.load_json
+        barrier = threading.Barrier(2, timeout=1)
+
+        def slow_load(path, default=None):
+            data = original(path, default)
+            if path == self.config:
+                try:
+                    barrier.wait()  # 没有锁时两个线程会在这里会合，读到同一份旧配置
+                except threading.BrokenBarrierError:
+                    pass
+            return data
+        with patch.object(core, "load_json", slow_load):
+            threads = [threading.Thread(target=core.set_profile, args=(None, "新画像")),
+                       threading.Thread(target=core.set_group_type, args=(None, 123, "opensource"))]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        cfg = self.read_config()
+        self.assertEqual((cfg["profile"], cfg["groups"][0]["type"]), ("新画像", "opensource"))
+
+
 if __name__ == "__main__":
     unittest.main()

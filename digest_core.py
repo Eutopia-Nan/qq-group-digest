@@ -18,6 +18,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -35,6 +36,8 @@ RAW_DIR = ROOT / "raw"
 CHUNK_CHARS = 40000
 CSV_FIELD_LIMIT = 1024 * 1024
 DAY_SECONDS = 24 * 3600
+# 回溯时间上限（约 11 年）。再大会让起点超出日期范围，运行时才报错。
+MAX_HOURS = 100000
 # 粗略估算：中文约 0.6 token/字，英文和符号更少。只用于"预计花费"提示，不参与计费。
 TOKENS_PER_CHAR = 0.6
 
@@ -44,7 +47,12 @@ class DigestError(Exception):
 
 
 class Cancelled(DigestError):
-    """用户取消了任务。"""
+    """用户取消了任务。section 是取消前已完成部分渲染出的报告段落（可能为 None）。"""
+
+    def __init__(self, message="任务已取消。", partial=None, section=None):
+        super().__init__(message)
+        self.partial = partial
+        self.section = section
 
 
 def _emit(emit, message, level="info", stage="info", **data):
@@ -429,6 +437,14 @@ def positive_hours(value):
     return hours
 
 
+def window_hours(value):
+    """保存到配置或从界面传入的回溯时间：在 positive_hours 基础上限制最大值。"""
+    hours = positive_hours(value)
+    if hours > MAX_HOURS:
+        raise ValueError(f"回溯时间不能超过 {MAX_HOURS} 小时（约 11 年）")
+    return hours
+
+
 def path_from_root(value):
     return ROOT / Path(value)
 
@@ -514,7 +530,7 @@ def validate_config(cfg):
                 continue
             if "hours" in preset:
                 try:
-                    positive_hours(preset["hours"])
+                    window_hours(preset["hours"])
                 except ValueError as e:
                     issues.append(_issue("presets", f"预设 {name!r} 的 hours 无效。{e}。"))
             for key in ("title", "report_dir"):
@@ -549,17 +565,30 @@ def save_config(cfg, path=None):
 # 每个函数：读取 → 修改 → 完整校验 → 原子写入，返回修改后的配置。
 # cfg_path 为 None 时使用默认的 config.json；文件不存在时从空配置开始（供首次启动向导使用）。
 
+# 同一进程内（例如界面服务同时处理两个请求）的"读取 → 修改 → 写回"串行执行，避免后写的覆盖先写的。
+_CONFIG_LOCK = threading.RLock()
+
+
 def _update(cfg_path, change):
     path = CONFIG_PATH if cfg_path is None else Path(cfg_path)
-    cfg = load_json(path, {})
-    change(cfg)
-    save_config(cfg, path)
+    with _CONFIG_LOCK:
+        cfg = load_json(path, {})
+        change(cfg)
+        save_config(cfg, path)
     return cfg
 
 
+def _text(value, label):
+    if not isinstance(value, str):
+        raise DigestError(f"{label}必须是文字。")
+    return value.strip()
+
+
 def _group_id(group_id):
+    if isinstance(group_id, bool) or not isinstance(group_id, (str, int)):
+        raise DigestError("群号只能是数字。")
     gid = str(group_id).strip()
-    if isinstance(group_id, bool) or not re.fullmatch(r"[0-9]+", gid):
+    if not re.fullmatch(r"[0-9]+", gid):
         raise DigestError("群号只能是数字。")
     return gid
 
@@ -572,6 +601,7 @@ def _group_index(cfg, gid):
 
 
 def _require_type(cfg, gtype):
+    _text(gtype, "群类型")
     topics = get_topics(cfg)
     if gtype not in topics:
         raise DigestError(f"群类型 {gtype!r} 未定义。可用类型：{', '.join(topics)}。")
@@ -579,9 +609,10 @@ def _require_type(cfg, gtype):
 
 def add_group(cfg_path, group_id, name, type):
     gid = _group_id(group_id)
-    name = (name or "").strip()
+    name = _text(name, "群名")
     if not name:
         raise DigestError("群名不能为空。")
+    _text(type, "群类型")
 
     def change(cfg):
         groups = cfg.setdefault("groups", [])
@@ -605,6 +636,7 @@ def remove_group(cfg_path, group_id):
 
 def set_group_type(cfg_path, group_id, type):
     gid = _group_id(group_id)
+    type = _text(type, "群类型")
 
     def change(cfg):
         index = _group_index(cfg, gid)
@@ -642,7 +674,7 @@ def _editable_topic(cfg, gtype, create):
 
 def set_category(cfg_path, type, name, description):
     """新增或修改分类；类型不存在时自动新建。"""
-    gtype, name = (type or "").strip(), (name or "").strip()
+    gtype, name = _text(type, "群类型"), _text(name, "分类名")
     if not gtype:
         raise DigestError("群类型名不能为空。")
     if not name:
@@ -656,6 +688,8 @@ def set_category(cfg_path, type, name, description):
 
 
 def remove_category(cfg_path, type, name):
+    type, name = _text(type, "群类型"), _text(name, "分类名")
+
     def change(cfg):
         cats = _editable_topic(cfg, type, False)["categories"]
         if name not in cats:
@@ -665,14 +699,15 @@ def remove_category(cfg_path, type, name):
 
 
 def set_explain_level(cfg_path, level):
-    if level not in EXPLAIN_LEVELS:
+    if not isinstance(level, str) or level not in EXPLAIN_LEVELS:
         raise DigestError(f"解释程度只能是 {', '.join(EXPLAIN_LEVELS)}。")
     return _update(cfg_path, lambda cfg: cfg.__setitem__("explain_style", EXPLAIN_LEVELS[level]))
 
 
 def set_preset_hours(cfg_path, preset, hours):
+    preset = _text(preset, "预设名")
     try:
-        hours = positive_hours(hours)
+        hours = window_hours(hours)
     except ValueError as e:
         raise DigestError(f"{e}。") from None
     if hours == int(hours):
@@ -919,7 +954,9 @@ def analyze(cfg, settings, group_name, gtype, msgs, emit=None, cancel=None, sour
     chunks = list(message_chunks(msgs, size))
     result = {"items": [], "glossary": [], "overview": []}
     for i, (chunk, sources) in enumerate(chunks, 1):
-        _check_cancel(cancel)
+        if cancel is not None and cancel.is_set():
+            # 已经付费拿到的批次不能丢：交给调用方渲染成部分结果
+            raise Cancelled(partial=_dedupe_glossary(result) if i > 1 else None)
         _emit(emit, f"  AI 分析第 {i} 批，{len(chunk)} 字...", stage="batch",
               source_key=source_key, batch=i, total_batches=len(chunks))
         try:
@@ -931,7 +968,10 @@ def analyze(cfg, settings, group_name, gtype, msgs, emit=None, cancel=None, sour
         result["glossary"].extend(r["glossary"])
         if r["overview"]:
             result["overview"].append(r["overview"])
-    # 术语去重
+    return _dedupe_glossary(result)
+
+
+def _dedupe_glossary(result):
     seen, gl = set(), []
     for g in result["glossary"]:
         if g.get("term") and g["term"] not in seen:
@@ -1142,7 +1182,7 @@ def window_from_spec(cfg, spec, emit=None):
         return resolve_window(cfg, all_=True, emit=emit)
     if mode == "hours":
         try:
-            hours = positive_hours(spec.get("hours"))
+            hours = window_hours(spec.get("hours"))
         except ValueError as e:
             raise DigestError(f"{e}。") from None
         return resolve_window(cfg, hours=hours, emit=emit)
@@ -1267,7 +1307,14 @@ def process(cfg, settings, opts, state, now, run_id, job, emit=None, cancel=None
         atomic_write(RAW_DIR / raw_name, "\n".join(message_prefix(msg) + msg.text for msg in useful))
     if opts.dry_run or not useful:
         return None, None, 0, len(useful)
-    result = analyze(cfg, settings, job.name, job.type, useful, emit, cancel, job.key)
+    try:
+        result = analyze(cfg, settings, job.name, job.type, useful, emit, cancel, job.key)
+    except Cancelled as e:
+        if e.partial is not None:
+            e.section = (render(job.name, job.type, e.partial, len(useful), period)
+                         + "\n> ⚠️ 任务被取消，本群只分析了部分消息，以上为已完成部分的结果。\n")
+            e.items = len(e.partial["items"])
+        raise
     section = render(job.name, job.type, result, len(useful), period)
     checkpoint = {"since": since, "seen": merged} if incremental else None
     return section, checkpoint, len(result["items"]), len(useful)
@@ -1277,7 +1324,7 @@ def run_digest(cfg, jobs, window, settings, dry_run=False, encoding=None, emit=N
     """处理所有来源并写出报告。
 
     返回 {"report_path", "sources": [{key, name, status, items, pending, error}], "failures", "cancelled", "dry_run"}。
-    status: ok / empty / dry_run / failed / cancelled
+    status: ok / empty / dry_run / failed / partial（取消时只分析了一部分）/ cancelled
     取消时：已完成的来源仍写入报告（标注已取消），但不推进处理进度，下次会重新处理。
     """
     opts = RunOptions(window.hours, window.all, dry_run, encoding)
@@ -1296,10 +1343,12 @@ def run_digest(cfg, jobs, window, settings, dry_run=False, encoding=None, emit=N
             try:
                 _check_cancel(cancel)
                 section, checkpoint, items, pending = process(cfg, settings, opts, state, now, run_id, job, emit, cancel)
-            except Cancelled:
+            except Cancelled as e:
                 outcome["cancelled"] = True
-                for skipped in outcome["sources"][index:]:
-                    skipped["status"] = "cancelled"
+                entry["status"] = "cancelled"
+                if e.section:
+                    sections.append(e.section)
+                    entry.update(status="partial", items=getattr(e, "items", 0))
                 for rest in jobs[index + 1:]:
                     outcome["sources"].append({"key": rest.key, "name": rest.name, "status": "cancelled",
                                                "items": 0, "pending": 0, "error": None})
@@ -1324,9 +1373,14 @@ def run_digest(cfg, jobs, window, settings, dry_run=False, encoding=None, emit=N
             if failures:
                 sections.append("## 未生成快报的来源\n\n" + "\n".join(f"- {name}：{error}" for name, error in failures))
             if outcome["cancelled"]:
+                partial = [s["name"] for s in outcome["sources"] if s["status"] == "partial"]
                 skipped = [s["name"] for s in outcome["sources"] if s["status"] == "cancelled"]
-                sections.append("## 已取消\n\n任务在完成前被取消，以下来源未处理：\n\n"
-                                + "\n".join(f"- {name}" for name in skipped))
+                note = "## 已取消\n\n任务在完成前被取消，处理进度没有推进，下次会重新处理这些消息。\n"
+                if partial:
+                    note += "\n只分析了部分消息：\n\n" + "\n".join(f"- {name}" for name in partial) + "\n"
+                if skipped:
+                    note += "\n未处理：\n\n" + "\n".join(f"- {name}" for name in skipped) + "\n"
+                sections.append(note)
             out = window.report_dir / f"{filename_label(window.title)}_{run_id}.md"
             body = "\n---\n\n".join(sections)
             atomic_write(out, f"# {window.title} {now:%Y-%m-%d %H:%M}\n\n{body}")
