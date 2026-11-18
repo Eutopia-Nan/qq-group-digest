@@ -83,7 +83,7 @@ run(cfg, plan, on_progress, cancel) -> RunResult
 #   RunResult = {report_path, sources: [{key, status, items, error}], failures}
 
 test_connection(cfg) -> {ok, model, message}   # 用最小请求验证 Key、模型和余额
-list_reports(cfg) -> list[{path, title, created, size}]
+list_reports(cfg) -> list[{id, path, name, dir, title, created, size}]
 read_report(path) -> str                       # 只允许读取配置的报告目录内的文件
 ```
 
@@ -133,9 +133,9 @@ set_defaults(cfg_path, selection, window) -> dict   # 同样"读取 → 修改 �
 | POST | `/api/run` | 开始任务，返回 `{job_id}`。**同一时间只允许一个任务** |
 | GET | `/api/jobs/{id}` | 任务进度，前端每秒轮询一次 |
 | POST | `/api/jobs/{id}/cancel` | 取消任务 |
-| GET | `/api/reports` | 历史报告列表 |
-| GET | `/api/reports/{name}` | 报告原文（Markdown） |
-| POST | `/api/import` | 拖入文件：复制到导出目录 |
+| GET | `/api/reports` | 历史报告列表，每条带 `id`（由完整路径算出，不同文件夹里的同名快报 id 不同） |
+| GET | `/api/reports/{id}` | 报告原文（Markdown）。界面一律用 `id` 打开；按文件名打开只在名字唯一时可用，重名时返回 409 |
+| POST | `/api/import` | 拖入文件：复制到导出目录。已有同名文件时返回 409（`field: "overwrite"`），用户确认替换后带 `?overwrite=1` 重新上传 |
 
 **`GET /api/config` 的返回格式**（`PUT /api/config`、`PUT /api/defaults` 和各项操作接口也返回这个格式）：
 ```
