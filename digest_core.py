@@ -1065,7 +1065,9 @@ def list_reports(cfg):
             except OSError:
                 continue
             title = first[2:].strip() if first.startswith("# ") else path.stem
-            reports.append({"path": str(path), "name": path.name, "dir": str(folder),
+            # id 由完整路径算出：不同文件夹里的同名快报也能分别打开
+            report_id = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
+            reports.append({"id": report_id, "path": str(path), "name": path.name, "dir": str(folder),
                             "title": title, "created": stat.st_mtime, "size": stat.st_size})
     reports.sort(key=lambda r: r["created"], reverse=True)
     return reports
@@ -1365,6 +1367,10 @@ def run_digest(cfg, jobs, window, settings, dry_run=False, encoding=None, emit=N
                 sections.append(section)
             if checkpoint:
                 updates[job.key] = checkpoint
+        if cancel is not None and cancel.is_set() and not outcome["cancelled"]:
+            # 最后一批请求进行中被取消：结果已付费，照常写入报告，但不推进进度
+            outcome["cancelled"] = True
+            _emit(emit, "\n任务已取消。", level="warn", stage="cancelled")
         failures = outcome["failures"]
         if dry_run:
             _emit(emit, "\ndry-run 结束。成功处理的原文保存于 raw/，未调用 AI。" if failures else

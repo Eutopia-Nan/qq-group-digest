@@ -272,6 +272,17 @@ class Import(AppTestCase):
         result = self.upload("聊天记录.txt", "x", "?group_id=789&name=" + urllib.parse.quote("班级群"))
         self.assertEqual(result["saved"], "群_789_班级群.txt")
 
+    def test_same_name_import_asks_before_replacing(self):
+        """Codex 联调：同名导入不能悄悄覆盖原文件。"""
+        self.upload("群_456_技术群.csv", "第一次")
+        self.assertEqual(self.upload("群_456_技术群.csv", "第二次", expect=409)["field"], "overwrite")
+        target = self.exports / "群_456_技术群.csv"
+        self.assertEqual(target.read_text(encoding="utf-8"), "第一次")
+        self.upload("群_456_技术群.csv", "第二次", "?overwrite=1")
+        self.assertEqual(target.read_text(encoding="utf-8"), "第二次")
+        self.assertEqual([p.name for p in self.exports.iterdir()], ["群_456_技术群.csv"], "不能留下临时文件")
+
+
     def test_import_rejects_bad_files_and_traversal(self):
         self.upload("群_1_x.exe", "x", expect=400)
         self.upload("群_1_x.csv", "", expect=400)
@@ -280,6 +291,20 @@ class Import(AppTestCase):
         self.assertTrue((self.exports / "群_1_逃逸.csv").exists())
         self.assertFalse((self.root.parent / "群_1_逃逸.csv").exists())
         self.assertEqual([p.name for p in self.exports.iterdir() if p.name.endswith(".part")], [])
+
+
+class ReportIds(AppTestCase):
+    def test_same_name_reports_open_separately(self):
+        """Codex 联调：两个报告目录各有一份 duplicate.md，要能分别打开。"""
+        for folder, text in (("今日快报", "日报内容"), ("今周快报", "周报内容")):
+            path = self.root / "reports" / folder
+            path.mkdir(parents=True)
+            (path / "duplicate.md").write_text(f"# {folder}\n{text}", encoding="utf-8")
+        reports = self.api("GET", "/api/reports")["reports"]
+        self.assertEqual(len({r["id"] for r in reports}), 2)
+        opened = {self.api("GET", "/api/reports/" + r["id"])["markdown"].splitlines()[1] for r in reports}
+        self.assertEqual(opened, {"日报内容", "周报内容"})
+        self.api("GET", "/api/reports/duplicate.md", expect=409)
 
 
 if __name__ == "__main__":

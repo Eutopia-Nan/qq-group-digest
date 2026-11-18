@@ -436,10 +436,16 @@ def make_handler(token, port, jobs):
                 if len(parts) == 1:
                     return 200, {"reports": reports}
                 if len(parts) == 2:
-                    match = next((r for r in reports if r["name"] == parts[1]), None)
+                    # 优先按 id 找；旧界面按 name 找时，只有名字唯一才行，否则会打开错的那份
+                    match = next((r for r in reports if r["id"] == parts[1]), None)
+                    if match is None:
+                        same_name = [r for r in reports if r["name"] == parts[1]]
+                        if len(same_name) > 1:
+                            raise HttpError(409, "有多份同名快报，请用列表里的 id 打开。")
+                        match = same_name[0] if same_name else None
                     if match is None:
                         raise HttpError(404, "没有这份快报。")
-                    return 200, {"name": match["name"], "title": match["title"],
+                    return 200, {"id": match["id"], "name": match["name"], "title": match["title"],
                                  "markdown": core.read_report(cfg, match["path"])}
 
             if method == "POST" and parts == ["import"]:
@@ -474,6 +480,9 @@ def make_handler(token, port, jobs):
             export_dir = core.path_from_root(core.text_setting(cfg, "export_dir", "") or core.default_export_dir())
             export_dir.mkdir(parents=True, exist_ok=True)
             target = export_dir / filename
+            if target.exists() and query.get("overwrite", [""])[0] != "1":
+                # 不悄悄覆盖：让界面问用户"替换吗？"，确认后带 overwrite=1 重新上传
+                raise HttpError(409, f"导出目录里已经有同名文件 {filename}，要替换它吗？", "overwrite")
             temp = export_dir / f".{filename}.{uuid.uuid4().hex[:8]}.part"
             self._consumed = True
             try:
