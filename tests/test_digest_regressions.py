@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import digest
+import digest_core as core
 
 
 class Clock(dt.datetime):
@@ -40,10 +41,10 @@ class DigestRegressions(unittest.TestCase):
         }), encoding="utf-8")
         Clock.current = dt.datetime(2027, 1, 1, 12)
         patches = (
-            patch.multiple(digest, ROOT=self.root, CONFIG_PATH=self.config, STATE_PATH=self.state,
+            patch.multiple(core, ROOT=self.root, CONFIG_PATH=self.config, STATE_PATH=self.state,
                            REPORT_DIR=self.reports, RAW_DIR=self.raw, dt=SimpleNamespace(datetime=Clock)),
-            patch.object(digest, "http_post", self.fake_post),
-            patch.object(digest.time, "sleep"),
+            patch.object(core, "http_post", self.fake_post),
+            patch.object(core.time, "sleep"),
         )
         for stub in patches:
             stub.start()
@@ -106,14 +107,14 @@ class DigestRegressions(unittest.TestCase):
 
     def test_report_write_failure_leaves_progress_retryable(self):
         source = self.write_csv("chat.csv", [("2027-01-01 11:00", "甲", "test")])
-        original = digest.atomic_write
+        original = core.atomic_write
 
         def fail_report(path, text):
             if path.suffix == ".md":
                 raise PermissionError("mock write failure")
             return original(path, text)
 
-        with patch.object(digest, "atomic_write", fail_report):
+        with patch.object(core, "atomic_write", fail_report):
             self.assertEqual(self.invoke("--file", source)[0], 1)
         self.assertFalse(self.state.exists())
         self.assertEqual(self.invoke("--file", source)[0], 0)
@@ -190,7 +191,7 @@ class DigestRegressions(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
         for _, payload, _ in self.calls:
             user = payload["messages"][1]["content"]
-            self.assertLessEqual(len(user), digest.CHUNK_CHARS)
+            self.assertLessEqual(len(user), core.CHUNK_CHARS)
             self.assertIn("M1 [2027-01-01 11:00:00] 甲: ", user)
 
     def test_failed_group_keeps_other_groups_report_and_checkpoint(self):
@@ -206,7 +207,7 @@ class DigestRegressions(unittest.TestCase):
                 raise urllib.error.HTTPError(url, 400, "mock", {}, io.BytesIO(b"bad request"))
             return self.fake_post(url, payload, headers, timeout)
 
-        with patch.object(digest, "http_post", fail_second):
+        with patch.object(core, "http_post", fail_second):
             self.assertEqual(self.invoke()[0], 1)
         state = json.loads(self.state.read_text(encoding="utf-8"))
         self.assertEqual(list(state["sources"]), ["group:123"])
@@ -237,7 +238,7 @@ class DigestRegressions(unittest.TestCase):
                           "2027-01-01 11:00 高数考试开考\n携带学生证", encoding="utf-8")
         modified = second.stat().st_mtime
         os.utime(first, (modified - 120, modified - 120))
-        self.assertEqual(digest.find_export(folder, 123), second)
+        self.assertEqual(core.find_export(folder, 123), second)
         code, out, _ = self.invoke("--file", second, "--hours", 24, "--dry-run")
         self.assertEqual(code, 0)
         self.assertIn("窗口内 1 条", out)

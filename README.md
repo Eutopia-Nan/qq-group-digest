@@ -207,11 +207,13 @@ CSV supports comma, semicolon and Tab delimiters. Timestamps can be local date-t
 
 ## Project Structure
 ```
-├── digest.py                 # main program
+├── digest.py                 # command-line entry (argument parsing, progress output)
+├── digest_core.py            # core logic: reading, filtering, AI calls, reports
 ├── config.example.json       # config template (copy to config.json)
 ├── 1_今日快报_24小时.bat      # daily digest launcher (Windows)
 ├── 2_今周快报_一周.bat        # weekly digest launcher (Windows)
-├── docs/                     # images for docs
+├── docs/                     # docs, FAQ and images
+├── tests/                    # automated tests
 ├── reports/                  # generated reports (git-ignored)
 ├── raw/                      # dry-run previews and optional plaintext copies (git-ignored)
 └── state.json                # incremental progress (git-ignored)
