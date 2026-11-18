@@ -386,5 +386,68 @@ class ReviewRegressions(CoreTestCase):
         self.assertFalse((self.root / "state.json").exists(), "取消时不能推进进度")
 
 
+class UiDefaults(CoreTestCase):
+    """界面"保存为默认"（大纲第 4.1 节）。"""
+
+    def test_missing_field_gives_fallback(self):
+        self.assertEqual(core.get_defaults(core.load_config()),
+                         {"selection": None, "window": {"mode": "since_last"}})
+
+    def test_set_and_get(self):
+        core.set_defaults(None, [], {"mode": "hours", "hours": "48"})
+        self.assertEqual(core.get_defaults(core.load_config()),
+                         {"selection": [], "window": {"mode": "hours", "hours": 48}})
+        core.set_defaults(None, None, {"mode": "all"})
+        self.assertIsNone(core.get_defaults(core.load_config())["selection"])
+
+    def test_bad_input_does_not_touch_file(self):
+        before = self.config.read_bytes()
+        bad = (("group:123", {"mode": "all"}), (["group:123", "group:123"], {"mode": "all"}),
+               (["123"], {"mode": "all"}), (["group:999"], {"mode": "all"}),
+               (None, {"mode": "preset", "name": "monthly"}), (None, {"mode": "hours", "hours": 0}),
+               (None, {"mode": "hours", "hours": 1e308}), (None, "daily"), (None, None))
+        for selection, window in bad:
+            with self.assertRaises(core.DigestError, msg=(selection, window)):
+                core.set_defaults(None, selection, window)
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_remove_group_prunes_selection(self):
+        core.add_group(None, 456, "技术群", "opensource")
+        core.set_defaults(None, ["group:123", "group:456"], {"mode": "since_last"})
+        core.remove_group(None, 456)
+        self.assertEqual(self.read_config()["ui_defaults"]["selection"], ["group:123"])
+
+    def test_deleted_preset_falls_back_without_rewriting(self):
+        """Codex 建议：保存的预设被删除后，恢复为"上次之后"，且不改写配置。"""
+        cfg = self.read_config()
+        cfg["presets"] = {"month": {"hours": 720}}
+        cfg["ui_defaults"] = {"selection": ["group:123", "group:777"], "window": {"mode": "preset", "name": "month"}}
+        self.write_config(cfg)
+        self.assertEqual(core.get_defaults(core.load_config())["window"], {"mode": "preset", "name": "month"})
+        del cfg["presets"]["month"]
+        self.write_config(cfg)
+        before = self.config.read_bytes()
+        defaults = core.get_defaults(core.load_config())
+        self.assertEqual(defaults, {"selection": ["group:123"], "window": {"mode": "since_last"}})
+        self.assertEqual(self.config.read_bytes(), before)
+        levels = {i["level"] for i in core.validate_config(cfg) if i["field"] == "ui_defaults"}
+        self.assertEqual(levels, {"warning"}, "引用已删除的群或预设只给 warning，不阻止保存")
+
+    def test_malformed_field_is_error_but_reading_still_works(self):
+        cfg = self.read_config()
+        cfg["ui_defaults"] = {"selection": "all", "window": []}
+        self.assertTrue(any(i["field"] == "ui_defaults" and i["level"] == "error" for i in core.validate_config(cfg)))
+        self.assertEqual(core.get_defaults(cfg), {"selection": None, "window": {"mode": "since_last"}})
+        cfg["ui_defaults"] = "x"
+        self.assertEqual(core.get_defaults(cfg)["selection"], None)
+
+    def test_cli_ignores_ui_defaults(self):
+        self.write_export(123, "学习群", [])
+        core.set_defaults(None, [], {"mode": "preset", "name": "weekly"})
+        cfg = core.load_config()
+        self.assertEqual([j.key for j in core.collect_jobs(cfg)], ["group:123"])
+        self.assertIsNone(core.resolve_window(cfg).hours)
+
+
 if __name__ == "__main__":
     unittest.main()

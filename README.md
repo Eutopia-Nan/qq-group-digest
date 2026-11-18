@@ -173,6 +173,7 @@ All settings live in `config.json`.
 | `presets` | Named time windows (`hours`), titles and output folders | `daily` 24h, `weekly` 168h |
 | `open_report` | Open the report automatically when done | `true` |
 | `save_raw` | Keep a plaintext copy during normal runs. A dry run always saves a preview. | `false` |
+| `ui_defaults` | Groups and time range the GUI pre-selects, written by its "save as default" button. The command line ignores it. | all groups, since last run |
 
 Built-in topics and presets accept field-level overrides. **Your categories are the full list**: whatever you put in `categories` is used as-is, and the built-in categories are no longer merged back in, so deleting a line really deletes that category. If you omit `categories`, the built-in ones are used. `{}` leaves only the automatic "其他有用" (other useful) category.
 

@@ -106,7 +106,26 @@ def config_view(cfg):
     presets = cfg.get("presets", {}) if isinstance(cfg.get("presets"), dict) else {}
     view["presets"] = {name: {**core.DEFAULT_PRESETS.get(name, {}), **(value if isinstance(value, dict) else {})}
                        for name, value in {**core.DEFAULT_PRESETS, **presets}.items()}
+    view["defaults"] = core.get_defaults(cfg)
     return view
+
+
+# PUT /api/config 是整体替换：必须带上这几项，防止只发一部分字段就把配置清空
+REQUIRED_CONFIG_KEYS = ("deepseek", "profile", "groups")
+KNOWN_CONFIG_KEYS = {"deepseek", "profile", "explain_style", "topics", "groups", "export_dir", "report_dir",
+                     "presets", "open_report", "save_raw", "ui_defaults", "price_per_million_tokens"}
+
+
+def check_full_config(body, current):
+    if not isinstance(body, dict):
+        raise HttpError(400, "配置必须是 JSON 对象。")
+    missing = [key for key in REQUIRED_CONFIG_KEYS if key not in body]
+    if missing:
+        raise HttpError(400, f"保存完整配置时缺少 {', '.join(missing)}，配置没有改动。", missing[0])
+    unknown = sorted(key for key in body if key not in KNOWN_CONFIG_KEYS and key not in current)
+    if unknown:
+        raise HttpError(400, f"{', '.join(unknown)} 不是配置项，配置没有改动。"
+                             "保存默认勾选和时间范围请用 PUT /api/defaults。", unknown[0])
 
 
 def load_cfg():
@@ -371,8 +390,12 @@ def make_handler(token, port, jobs):
                 if method == "GET" and len(parts) == 1:
                     return 200, config_view(load_cfg())
                 if method == "PUT" and len(parts) == 1:
-                    cfg = restore_key(self.json_body(), load_cfg())
-                    core.save_config(cfg)
+                    body = self.json_body()
+                    with core._CONFIG_LOCK:
+                        current = load_cfg()
+                        check_full_config(body, current)
+                        cfg = restore_key(body, current)
+                        core.save_config(cfg)
                     return 200, config_view(cfg)
                 if method == "POST" and parts == ["config", "validate"]:
                     cfg = restore_key(self.json_body(), load_cfg())
@@ -393,6 +416,11 @@ def make_handler(token, port, jobs):
                     return 200, config_view(core.remove_group(None, parts[1]))
                 if len(parts) == 2 and method == "PATCH":
                     return 200, config_view(core.set_group_type(None, parts[1], self.json_body().get("type", "")))
+            if method == "PUT" and parts == ["defaults"]:
+                body = self.json_body()
+                if "selection" not in body or "window" not in body:
+                    raise HttpError(400, "请同时提供 selection 和 window。")
+                return 200, config_view(core.set_defaults(None, body["selection"], body["window"]))
             if method == "PUT" and parts == ["focus"]:
                 body = self.json_body()
                 if "profile" not in body and "explain_level" not in body:
