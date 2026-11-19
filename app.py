@@ -17,8 +17,10 @@ import argparse
 import hmac
 import json
 import mimetypes
+import os
 import re
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -109,13 +111,35 @@ def config_view(cfg):
     view["presets"] = {name: {**core.DEFAULT_PRESETS.get(name, {}), **(value if isinstance(value, dict) else {})}
                        for name, value in {**core.DEFAULT_PRESETS, **presets}.items()}
     view["defaults"] = core.get_defaults(cfg)
+    view["paths"] = effective_paths(cfg)
     return view
+
+
+def effective_paths(cfg):
+    """设置页提示用：留空时实际使用的目录，以及当前生效的目录。"""
+    def setting(key):
+        value = cfg.get(key, "")
+        return value if isinstance(value, str) else ""
+    default_export = core.default_export_dir()
+    return {"default_export_dir": str(default_export), "default_report_dir": str(core.REPORT_DIR),
+            "export_dir": str(core.path_from_root(setting("export_dir") or default_export)),
+            "report_dir": str(core.path_from_root(setting("report_dir") or core.REPORT_DIR))}
+
+
+def reveal_folder(path):
+    """用系统文件管理器打开文件夹。"""
+    if os.name == "nt":
+        os.startfile(str(path))  # noqa: S606 - 只会打开报告目录
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
 
 
 # PUT /api/config 是整体替换：必须带上这几项，防止只发一部分字段就把配置清空
 REQUIRED_CONFIG_KEYS = ("deepseek", "profile", "groups")
 KNOWN_CONFIG_KEYS = {"deepseek", "profile", "explain_style", "topics", "groups", "export_dir", "report_dir",
-                     "presets", "open_report", "save_raw", "ui_defaults", "price_per_million_tokens"}
+                     "presets", "open_report", "save_raw", "ui_defaults", "ui_theme", "price_per_million_tokens"}
 
 
 def check_full_config(body, current):
@@ -356,6 +380,8 @@ def make_handler(token, port, jobs):
                 self.send(status, body)
             except HttpError as e:
                 self.fail(e.status, e.message, e.field)
+            except core.ConflictError as e:
+                self.fail(409, str(e), e.field)
             except DigestError as e:
                 self.fail(400, str(e))
             except Exception:
@@ -433,12 +459,29 @@ def make_handler(token, port, jobs):
                 if "explain_level" in body:
                     cfg = core.set_explain_level(None, body["explain_level"])
                 return 200, config_view(cfg)
+            if method == "PUT" and parts == ["theme"]:
+                return 200, config_view(core.set_ui_theme(None, self.json_body().get("theme")))
             if head == "topics" and len(parts) == 4 and parts[2] == "categories":
                 gtype, name = parts[1], parts[3]
                 if method == "PUT":
                     return 200, config_view(core.set_category(None, gtype, name, self.json_body().get("description", "")))
+                if method == "PATCH":
+                    body = self.json_body()
+                    return 200, config_view(core.update_category(None, gtype, name, body.get("name"),
+                                                                 body.get("description"), body.get("order")))
                 if method == "DELETE":
                     return 200, config_view(core.remove_category(None, gtype, name))
+            # 群类型本身：新建 / 改名或改关注方向 / 删除（还有群在用时 409）
+            if head == "topics" and method == "POST" and len(parts) == 1:
+                body = self.json_body()
+                cfg, key = core.add_topic(None, body.get("label", ""), body.get("focus"), body.get("key"))
+                return 200, {**config_view(cfg), "key": key}
+            if head == "topics" and len(parts) == 2:
+                if method == "PATCH":
+                    body = self.json_body()
+                    return 200, config_view(core.update_topic(None, parts[1], body.get("label"), body.get("focus")))
+                if method == "DELETE":
+                    return 200, config_view(core.remove_topic(None, parts[1]))
 
             if method == "GET" and parts == ["sources"]:
                 return 200, {"sources": core.scan_sources(load_cfg())}
@@ -459,6 +502,9 @@ def make_handler(token, port, jobs):
                 if method == "POST" and len(parts) == 3 and parts[2] == "cancel":
                     job.cancel.set()
                     return 200, {"ok": True}
+
+            if method == "POST" and parts == ["reports", "open-folder"]:
+                return 200, self.open_report_folder(self.json_body())
 
             if method == "GET" and head == "reports":
                 cfg = load_cfg()
@@ -482,6 +528,26 @@ def make_handler(token, port, jobs):
                 return 200, self.import_file(query)
 
             raise HttpError(404, "没有这个接口。")
+
+        def open_report_folder(self, body):
+            """打开某份快报所在的文件夹；不带 id 时打开默认报告目录。只能打开配置的报告目录。"""
+            cfg = load_cfg()
+            report_id = body.get("id")
+            if report_id is not None:
+                match = next((r for r in core.list_reports(cfg) if r["id"] == report_id), None)
+                if match is None:
+                    raise HttpError(404, "没有这份快报。")
+                folder = Path(match["path"]).resolve().parent
+            else:
+                folder = core._report_dirs(cfg)[0]
+                folder.mkdir(parents=True, exist_ok=True)
+            if folder not in core._report_dirs(cfg):
+                raise HttpError(403, "只能打开报告文件夹。")
+            try:
+                reveal_folder(folder)
+            except OSError:
+                raise HttpError(500, "没能打开文件夹，请手动打开报告目录。") from None
+            return {"ok": True}
 
         def import_file(self, query):
             """拖入导出文件：请求体是文件内容，文件名放在 X-Filename 头（URL 编码）。

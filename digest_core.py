@@ -48,6 +48,14 @@ class DigestError(Exception):
     """可以直接显示给用户的错误。"""
 
 
+class ConflictError(DigestError):
+    """操作和现有数据冲突（例如重名、类型还在被群使用）。界面服务返回 409。"""
+
+    def __init__(self, message, field=None):
+        super().__init__(message)
+        self.field = field
+
+
 class Cancelled(DigestError):
     """用户取消了任务。section 是取消前已完成部分渲染出的报告段落（可能为 None）。"""
 
@@ -305,11 +313,16 @@ def load_messages(path, encoding, since, until, allow_undated, emit=None):
     if bad_lines:
         preview = ", ".join(str(line) for line in bad_lines[:5])
         _emit(emit, f"  [提醒] {path.name} 跳过 {len(bad_lines)} 处无效时间或列数不符的记录（行号：{preview}）。",
-              level="warn", stage="read")
+              level="warn", stage="read", code="bad_lines",
+              summary=f"跳过了 {len(bad_lines)} 处时间无效或列数不对的记录",
+              detail=f"{path.name} 第 {', '.join(str(line) for line in bad_lines[:50])}"
+                     f"{' 等' if len(bad_lines) > 50 else ''} 行")
         if latest is None:
             raise DigestError(f"{path.name} 没有可识别的消息时间。支持带时间的日期、ISO 8601 或 10/13 位时间戳。")
     if since is not None and latest is not None and latest < since:
-        _emit(emit, f"  [提醒] {path.name} 的最新消息早于筛选起点，请确认已经重新导出。", level="warn", stage="read")
+        _emit(emit, f"  [提醒] {path.name} 的最新消息早于筛选起点，请确认已经重新导出。", level="warn", stage="read",
+              code="stale_export", summary="最新消息比筛选起点还早，可能还没重新导出",
+              detail=f"{path.name} 最新一条是 {date_label(latest)}，筛选从 {date_label(since)} 开始")
     return selected
 
 
@@ -405,11 +418,15 @@ def get_topics(cfg):
 
     某个类型在 config.json 里写了 categories 时，以它为准（不再与内置分类合并），
     这样用户删掉一个分类就真的删掉了。没写 categories 时沿用内置分类。
+    写成 {"removed": true} 的类型视为已删除（用来删除内置类型；旧版本会忽略这个标记）。
     """
     topics = DEFAULT_TOPICS.copy()
     for name, topic in object_setting(cfg, "topics").items():
         if not isinstance(topic, dict):
             raise DigestError(f"config.json 中的 topics.{name} 必须是 JSON 对象。")
+        if topic.get("removed") is True:
+            topics.pop(name, None)
+            continue
         base = DEFAULT_TOPICS.get(name, {})
         cats = topic.get("categories", base.get("categories", {}))
         if not isinstance(cats, dict) or any(not isinstance(item, str) for item in cats.values()):
@@ -517,6 +534,8 @@ def validate_config(cfg):
     for key in ("save_raw", "open_report"):
         if key in cfg and not isinstance(cfg[key], bool):
             issues.append(_issue(key, f"config.json 中的 {key} 必须是 true 或 false。"))
+    if "ui_theme" in cfg and cfg["ui_theme"] not in UI_THEMES:
+        issues.append(_issue("ui_theme", f"config.json 中的 ui_theme 只能是 {', '.join(UI_THEMES)}。", "warning"))
     topics_ok = check("topics", lambda: get_topics(cfg))
     check("deepseek", lambda: api_settings(cfg))
     groups = []
@@ -549,7 +568,7 @@ def validate_config(cfg):
             issues.append(_issue("deepseek", "还没有填写 API Key。", "warning"))
         profile = cfg.get("profile", "").strip()
         if not profile or profile.startswith(PLACEHOLDER_PROFILE):
-            issues.append(_issue("profile", "还没有填写个人情况，AI 无法判断什么对你有用。", "warning"))
+            issues.append(_issue("profile", "还没填个人情况，填了才能筛得准。", "warning"))
         if not groups:
             issues.append(_issue("groups", "还没有添加任何群。", "warning"))
     return issues
@@ -663,6 +682,13 @@ def _editable_topic(cfg, gtype, create):
     topics = cfg.setdefault("topics", {})
     if not isinstance(topics, dict):
         raise DigestError("config.json 中的 topics 必须是 JSON 对象。")
+    if gtype in topics and isinstance(topics[gtype], dict) and topics[gtype].get("removed") is True:
+        if not create:
+            raise DigestError(f"群类型 {gtype!r} 未定义。")
+        # 已删除的内置类型被重新使用：作为一个空的新类型恢复
+        base = DEFAULT_TOPICS.get(gtype, {})
+        topics[gtype] = {"label": base.get("label", gtype), "focus": base.get("focus", NEW_TOPIC_FOCUS),
+                         "categories": {}}
     if gtype not in topics:
         if gtype in DEFAULT_TOPICS:
             base = DEFAULT_TOPICS[gtype]
@@ -703,6 +729,154 @@ def remove_category(cfg_path, type, name):
             raise DigestError(f"类型 {type!r} 里没有分类「{name}」。")
         del cats[name]
     return _update(cfg_path, change)
+
+
+def update_category(cfg_path, type, name, new_name=None, description=None, order=None):
+    """修改已有分类：改名（保持原来的位置）、改说明、调整顺序（order 为从 0 开始的位置）。"""
+    gtype, name = _text(type, "群类型"), _text(name, "分类名")
+    if new_name is None and description is None and order is None:
+        raise DigestError("请提供要修改的分类名、说明或顺序。")
+    if new_name is not None:
+        new_name = _text(new_name, "分类名")
+        if not new_name:
+            raise DigestError("分类名不能为空。")
+        if new_name == OTHER_CATEGORY:
+            raise DigestError(f"「{OTHER_CATEGORY}」分类由程序自动添加，不需要手动设置。")
+    if description is not None and not isinstance(description, str):
+        raise DigestError("分类说明必须是文字。")
+    if order is not None and (isinstance(order, bool) or not isinstance(order, int) or order < 0):
+        raise DigestError("分类顺序必须是不小于 0 的整数。")
+
+    def change(cfg):
+        cats = _editable_topic(cfg, gtype, False)["categories"]
+        if name not in cats:
+            raise DigestError(f"类型 {gtype!r} 里没有分类「{name}」。")
+        target = name if new_name is None else new_name
+        if target != name and target in cats:
+            raise ConflictError(f"已经有分类「{target}」了。", "name")
+        items = list(cats.items())
+        index = next(i for i, (key, _) in enumerate(items) if key == name)
+        entry = (target, cats[name] if description is None else description.strip())
+        items[index] = entry
+        if order is not None:
+            items.pop(index)
+            items.insert(min(order, len(items)), entry)
+        cats.clear()
+        cats.update(items)
+    return _update(cfg_path, change)
+
+
+TOPIC_LABEL_MAX = 30
+TOPIC_FOCUS_MAX = 200
+TOPIC_KEY = re.compile(r"[A-Za-z0-9_-]{1,40}")
+
+
+def _topic_label(cfg, label, skip=None):
+    label = _text(label, "类型名")
+    if not label:
+        raise DigestError("类型名不能为空。")
+    if len(label) > TOPIC_LABEL_MAX:
+        raise DigestError(f"类型名最多 {TOPIC_LABEL_MAX} 个字。")
+    for key, topic in get_topics(cfg).items():
+        if key != skip and topic.get("label", key) == label:
+            raise ConflictError(f"已经有叫「{label}」的类型了。", "label")
+    return label
+
+
+def _topic_focus(focus):
+    focus = _text(focus, "关注方向")
+    if not focus:
+        raise DigestError("关注方向不能为空。")
+    if len(focus) > TOPIC_FOCUS_MAX:
+        raise DigestError(f"关注方向最多 {TOPIC_FOCUS_MAX} 个字。")
+    return focus
+
+
+def add_topic(cfg_path, label, focus=None, key=None):
+    """新建群类型，返回 (配置, 类型键)。不指定 key 时：英文名直接用作键，否则用 custom_1、custom_2……"""
+    if key is not None:
+        key = _text(key, "类型键")
+        if not TOPIC_KEY.fullmatch(key):
+            raise DigestError("类型键只能包含英文字母、数字、下划线和短横线，最多 40 个字符。")
+    focus = NEW_TOPIC_FOCUS if focus is None else _topic_focus(focus)
+    created = []
+
+    def change(cfg):
+        clean = _topic_label(cfg, label)
+        topics = cfg.setdefault("topics", {})
+        if not isinstance(topics, dict):
+            raise DigestError("config.json 中的 topics 必须是 JSON 对象。")
+        active = get_topics(cfg)
+        if key is not None:
+            if key in active:
+                raise ConflictError(f"类型键 {key!r} 已经存在。", "key")
+            chosen = key
+        else:
+            # 自动生成的键不复用任何出现过的键（包括已删除的内置类型），免得和旧数据混在一起
+            taken = set(active) | set(topics) | set(DEFAULT_TOPICS)
+            slug = clean.lower()
+            chosen = slug if TOPIC_KEY.fullmatch(slug) and slug not in taken else None
+            number = 1
+            while chosen is None:
+                if f"custom_{number}" not in taken:
+                    chosen = f"custom_{number}"
+                number += 1
+        topics[chosen] = {"label": clean, "focus": focus, "categories": {}}
+        created.append(chosen)
+    cfg = _update(cfg_path, change)
+    return cfg, created[0]
+
+
+def update_topic(cfg_path, type, label=None, focus=None):
+    """修改群类型的显示名（label）或关注方向（focus）。类型键不变，群和命令行引用的都是键。"""
+    gtype = _text(type, "群类型")
+    if label is None and focus is None:
+        raise DigestError("请提供要修改的类型名或关注方向。")
+    if focus is not None:
+        focus = _topic_focus(focus)
+
+    def change(cfg):
+        topic = _editable_topic(cfg, gtype, False)
+        if label is not None:
+            topic["label"] = _topic_label(cfg, label, skip=gtype)
+        if focus is not None:
+            topic["focus"] = focus
+    return _update(cfg_path, change)
+
+
+def remove_topic(cfg_path, type):
+    """删除群类型。还有群在用时抛 ConflictError；内置类型写成 {"removed": true}。"""
+    gtype = _text(type, "群类型")
+
+    def change(cfg):
+        topics = get_topics(cfg)
+        if gtype not in topics:
+            raise DigestError(f"群类型 {gtype!r} 未定义。")
+        users = [name for _, name, group_type in configured_groups(cfg) if group_type == gtype]
+        if users:
+            label = topics[gtype].get("label", gtype)
+            raise ConflictError(f"还有 {len(users)} 个群在用「{label}」：{'、'.join(users)}。"
+                                "先把它们改成别的类型再删除。", "groups")
+        if len(topics) == 1:
+            raise DigestError("至少要保留一个群类型。")
+        raw = cfg.setdefault("topics", {})
+        if not isinstance(raw, dict):
+            raise DigestError("config.json 中的 topics 必须是 JSON 对象。")
+        if gtype in DEFAULT_TOPICS:
+            raw[gtype] = {"removed": True}
+        else:
+            raw.pop(gtype, None)
+    return _update(cfg_path, change)
+
+
+UI_THEMES = ("light", "sepia", "dark")
+
+
+def set_ui_theme(cfg_path, theme):
+    """图形界面的外观：light（白）/ sepia（米黄）/ dark（黑）。命令行不读这一项。"""
+    if not isinstance(theme, str) or theme not in UI_THEMES:
+        raise DigestError(f"外观只能是 {', '.join(UI_THEMES)}。")
+    return _update(cfg_path, lambda cfg: cfg.__setitem__("ui_theme", theme))
 
 
 def set_explain_level(cfg_path, level):
@@ -1177,6 +1351,23 @@ def _report_dirs(cfg):
     return unique
 
 
+REPORT_PERIOD = re.compile(r"\*(.+?)，共 \d+ 条消息\*")
+REPORT_SCAN_CHARS = 64 * 1024
+
+
+def _report_summary(text):
+    """从报告正文里找出各群的名字和时间范围（render() 写的「## 群名」+「*时间范围，共 N 条消息*」）。"""
+    lines = text.splitlines()
+    groups, periods = [], []
+    for index, line in enumerate(lines[:-1]):
+        if line.startswith("## "):
+            match = REPORT_PERIOD.fullmatch(lines[index + 1].strip())
+            if match:
+                groups.append(line[3:].strip())
+                periods.append(match[1])
+    return groups, (periods[0] if periods else "")
+
+
 def list_reports(cfg):
     """所有报告目录里的 .md 文件，最新的在前。"""
     reports = []
@@ -1188,15 +1379,18 @@ def list_reports(cfg):
                 continue
             try:
                 with path.open(encoding="utf-8", errors="replace") as stream:
-                    first = stream.readline().strip()
+                    head = stream.read(REPORT_SCAN_CHARS)
                 stat = path.stat()
             except OSError:
                 continue
+            first = head.split("\n", 1)[0].strip()
             title = first[2:].strip() if first.startswith("# ") else path.stem
+            groups, period = _report_summary(head)
             # id 由完整路径算出：不同文件夹里的同名快报也能分别打开
             report_id = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
             reports.append({"id": report_id, "path": str(path), "name": path.name, "dir": str(folder),
-                            "title": title, "created": stat.st_mtime, "size": stat.st_size})
+                            "title": title, "created": stat.st_mtime, "size": stat.st_size,
+                            "groups": groups, "period": period})
     reports.sort(key=lambda r: r["created"], reverse=True)
     return reports
 
@@ -1546,14 +1740,19 @@ def plan(cfg, selection=None, window=None):
     now = dt.datetime.now()
     sources, total_batches, total_chars = [], 0, 0
     for job in jobs:
-        warnings = []
+        warnings, notices = [], []
         entry = {"key": job.key, "name": job.name, "type": job.type, "file": str(job.path),
-                 "in_window": 0, "pending": 0, "chars": 0, "batches": 0, "warnings": warnings, "error": None}
+                 "in_window": 0, "pending": 0, "chars": 0, "batches": 0, "warnings": warnings,
+                 "notices": notices, "error": None}
         sources.append(entry)
 
-        def collect(event, warnings=warnings):
+        def collect(event, warnings=warnings, notices=notices):
             if event["level"] in ("warn", "error"):
-                warnings.append(event["message"].strip())
+                text = event["message"].strip()
+                warnings.append(text)
+                # 给界面用的结构化提醒：code 决定显示什么建议操作，detail（如行号）默认折叠
+                notices.append({"level": event["level"], "code": event.get("code", "other"),
+                                "message": event.get("summary", text), "detail": event.get("detail", "")})
         try:
             msgs, useful, _, _, _ = _select_messages(cfg, opts, state, now, job, collect)
             chunks = list(message_chunks(useful, _chunk_size(cfg, job.name))) if useful else []
