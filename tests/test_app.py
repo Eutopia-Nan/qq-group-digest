@@ -236,6 +236,71 @@ class FourOperations(AppTestCase):
         self.assertNotIn("竞赛与加分", self.saved()["topics"]["study"]["categories"])
 
 
+    def test_patch_category(self):
+        path = f"/api/topics/study/categories/{urllib.parse.quote('学习资料')}"
+        view = self.api("PATCH", path, {"name": "资料", "description": "真题", "order": 0})
+        self.assertEqual(list(view["topics"]["study"]["categories"].items())[0], ("资料", "真题"))
+        self.assertEqual(self.api("PATCH", f"/api/topics/study/categories/{urllib.parse.quote('资料')}",
+                                  {"name": "竞赛与加分"}, expect=409)["field"], "name")
+        self.api("PATCH", f"/api/topics/study/categories/{urllib.parse.quote('资料')}", {}, expect=400)
+
+    def test_topic_lifecycle(self):
+        view = self.api("POST", "/api/topics", {"label": "求职群", "focus": "实习信息"})
+        key = view["key"]
+        self.assertEqual(view["topics"][key]["label"], "求职群")
+        self.api("POST", "/api/topics", {"label": "求职群"}, expect=409)
+        view = self.api("PATCH", f"/api/topics/{key}", {"label": "实习群", "focus": "暑期实习"})
+        self.assertEqual((view["topics"][key]["label"], view["topics"][key]["focus"]), ("实习群", "暑期实习"))
+        self.api("PATCH", f"/api/topics/{key}", {}, expect=400)
+        self.api("PATCH", "/api/groups/123", {"type": key})
+        conflict = self.api("DELETE", f"/api/topics/{key}", expect=409)
+        self.assertIn("学习群", conflict["error"])
+        self.api("PATCH", "/api/groups/123", {"type": "study"})
+        view = self.api("DELETE", f"/api/topics/{key}")
+        self.assertNotIn(key, view["topics"])
+        view = self.api("DELETE", "/api/topics/opensource")
+        self.assertNotIn("opensource", view["topics"])
+        self.assertEqual(self.saved()["topics"]["opensource"], {"removed": True})
+        self.api("DELETE", "/api/topics/nope", expect=400)
+
+
+class ConfigViewExtras(AppTestCase):
+    def test_theme_is_saved_and_validated(self):
+        view = self.api("PUT", "/api/theme", {"theme": "sepia"})
+        self.assertEqual(view["config"]["ui_theme"], "sepia")
+        self.assertEqual(self.saved_config()["ui_theme"], "sepia")
+        before = self.config.read_bytes()
+        self.api("PUT", "/api/theme", {"theme": "pink"}, expect=400)
+        self.api("PUT", "/api/theme", {}, expect=400)
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def saved_config(self):
+        return json.loads(self.config.read_text(encoding="utf-8"))
+
+    def test_paths_show_effective_directories(self):
+        paths = self.api("GET", "/api/config")["paths"]
+        self.assertEqual(Path(paths["export_dir"]), self.exports)
+        self.assertEqual(Path(paths["report_dir"]), self.root / "reports")
+        self.assertTrue(paths["default_export_dir"].endswith("QQ聊天记录导出"))
+
+    def test_open_report_folder_only_inside_report_dirs(self):
+        folder = self.root / "reports"
+        folder.mkdir()
+        (folder / "a.md").write_text("# 快报", encoding="utf-8")
+        report_id = self.api("GET", "/api/reports")["reports"][0]["id"]
+        opened = []
+        with patch.object(app, "reveal_folder", opened.append):
+            self.api("POST", "/api/reports/open-folder", {"id": report_id})
+            self.api("POST", "/api/reports/open-folder", {})
+            self.api("POST", "/api/reports/open-folder", {"id": "nope"}, expect=404)
+        self.assertEqual(opened, [folder.resolve(), folder.resolve()])
+
+    def test_open_report_folder_failure_is_reported(self):
+        def broken(path):
+            raise OSError("no file manager")
+        with patch.object(app, "reveal_folder", broken):
+            self.assertIn("没能打开", self.api("POST", "/api/reports/open-folder", {}, expect=500)["error"])
+
 class SourcesPlanRun(AppTestCase):
     def setUp(self):
         super().setUp()

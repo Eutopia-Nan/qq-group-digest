@@ -4,143 +4,288 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <title>QQ群聊整理</title>
   <link rel="stylesheet" href="style.css">
   <script src="app.js" defer></script>
 </head>
 <body>
+  <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></g></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></g></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19zM12 10v4.5M12 17.2v.3"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8v.3"/></symbol>
+    <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-paper" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol>
+  </svg>
+
   <header class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">群</span>QQ群聊整理</a>
-      <nav aria-label="主导航">
-        <a href="#home" id="home-link">主页</a>
-        <a href="#reports" id="reports-link">快报</a>
-      </nav>
-      <button type="button" class="button settings-button" id="open-settings">设置</button>
-    </div>
+    <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">群</span><span class="brand-text">QQ群聊整理</span></a>
+    <nav class="tabs" aria-label="主导航">
+      <a href="#home" id="nav-home">主页</a>
+      <a href="#focus" id="nav-focus">关注点<span class="dot" id="focus-dot" hidden><span class="sr-only">（有待填写）</span></span></a>
+      <a href="#reports" id="nav-reports">快报<span class="pill" id="nav-running" hidden>生成中</span></a>
+    </nav>
+    <button type="button" class="btn btn-ghost btn-icon theme-btn" id="toggle-theme"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+    <button type="button" class="btn btn-ghost settings-btn" id="open-settings" aria-haspopup="dialog">
+      <svg class="icon" aria-hidden="true"><use href="#i-gear"/></svg>设置<span class="dot dot-corner" id="settings-dot" hidden><span class="sr-only">（有待填写）</span></span>
+    </button>
   </header>
+
   <main class="shell">
-    <div id="global-message" class="global-message" role="status" hidden></div>
-    <ul id="status-warnings" class="status-warnings" aria-label="配置提示" aria-live="polite" hidden></ul>
-    <section id="home-view">
-      <header class="page-heading">
-        <h1>生成快报</h1>
-        <p>选好群和时间范围，再按你的关注点整理消息。</p>
-      </header>
-      <div class="dashboard">
-        <div class="primary">
-          <section class="card" aria-labelledby="groups-title">
-            <div class="card-head">
-              <div><h2 id="groups-title">群聊来源</h2><p id="selection-count"></p></div>
-              <label class="button" id="import-zone">导入 CSV / TXT<input type="file" id="import-input" accept=".csv,.txt" multiple></label>
+    <div id="fatal" class="banner banner-danger" role="alert" hidden></div>
+    <div id="todos" class="todos" hidden>
+      <span class="todos-title">还差几步</span>
+      <ul id="todo-list" class="todo-list"></ul>
+    </div>
+
+    <!-- 主页：1 选择群 → 2 时间范围 → 3 生成 -->
+    <section id="view-home" class="view" aria-label="主页">
+      <div class="home">
+        <section class="pane-main" aria-labelledby="groups-title">
+          <div class="section-head">
+            <h2 id="groups-title" class="section-title"><span class="step" aria-hidden="true">1</span>选择群</h2>
+            <span id="selection-count" class="meta"></span>
+            <div class="actions">
+              <button type="button" class="btn btn-ghost btn-icon" id="refresh-sources" aria-label="重新扫描导出目录" title="重新扫描导出目录"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+              <label class="btn" id="import-button"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>导入<input type="file" id="import-input" class="file-input" accept=".csv,.txt" multiple></label>
             </div>
-            <p id="source-message" class="field-message" role="status" hidden></p>
-            <form id="import-group" class="category-form" hidden>
-              <label>群号<input id="import-group-id" inputmode="numeric" pattern="[0-9]+" required></label>
-              <label>群名<input id="import-group-name" maxlength="60"></label>
-              <button type="submit" class="button primary-button">导入到此群</button>
-              <button type="button" class="button" id="cancel-import">取消</button>
-            </form>
-            <div id="groups"></div>
-            <div id="discovered" class="discovered" hidden><h3>发现的导出文件</h3><div id="discovered-list"></div></div>
+          </div>
+
+          <form id="import-group" class="import-form" hidden>
+            <p id="import-prompt" class="import-prompt"></p>
+            <div class="import-fields">
+              <label class="field-compact">群号<input id="import-group-id" class="input" inputmode="numeric" pattern="[0-9]+" required></label>
+              <label class="field-compact">群名<input id="import-group-name" class="input" maxlength="60"></label>
+              <button type="submit" class="btn btn-primary">导入</button>
+              <button type="button" class="btn" id="cancel-import">跳过</button>
+            </div>
+          </form>
+
+          <ul id="source-list" class="source-list" aria-label="群聊来源"></ul>
+
+          <div id="sources-empty" class="empty" hidden>
+            <h3>还没发现聊天记录</h3>
+            <ol>
+              <li>用导出工具（比如 README 里提到的 qq-chat-exporter）把群聊导出成 <strong>CSV</strong>，带昵称更好。</li>
+              <li>放进导出目录：<span id="empty-export-dir" class="path"></span> <button type="button" class="link-btn" id="empty-change-dir">改目录</button></li>
+              <li>点右上角 <span class="kbd-like">⟳</span> 重新扫描，或者直接把文件拖到这里。</li>
+            </ol>
+          </div>
+
+          <div id="dropzone" class="dropzone">
+            <svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>
+            <span>把 CSV / TXT 拖到这里，或 <button type="button" class="link-btn" id="dropzone-pick">选择文件</button></span>
+            <small>文件名是「群_群号_群名.csv」时会自动认出群号</small>
+          </div>
+        </section>
+
+        <aside class="pane-side" aria-label="时间范围与生成">
+          <section class="side-block" aria-labelledby="window-title">
+            <h2 id="window-title" class="section-title"><span class="step" aria-hidden="true">2</span>时间范围</h2>
+            <div id="windows" class="segmented segmented-wrap" role="group" aria-labelledby="window-title"></div>
+            <div id="custom-window" class="custom-window" hidden>
+              <label for="window-value" class="sr-only">回溯时长</label>
+              <input id="window-value" class="input" type="number" min="0" step="any" value="48">
+              <select id="window-unit" class="input select" aria-label="时间单位"><option value="hours">小时</option><option value="days">天</option></select>
+            </div>
+            <p id="window-error" class="field-error" role="alert" hidden></p>
+            <div class="window-foot">
+              <span id="window-hint" class="hint"></span>
+              <button type="button" id="save-default" class="link-btn link-muted" disabled>保存为默认</button>
+            </div>
           </section>
 
-          <section class="card" aria-labelledby="focus-title">
-            <div class="card-head"><div><h2 id="focus-title">我的关注点</h2><p>同一类型的群共用一套分类。</p></div></div>
-            <label class="field-label" for="profile">个人情况</label>
-            <textarea id="profile" rows="2" maxlength="1000" placeholder="比如大二，想找暑期实习，也关注高数作业。"></textarea>
-            <small id="profile-message" class="field-message" role="status">离开输入框时保存</small>
-            <div class="category-head">
-              <label class="field-label" for="topic">信息分类</label>
-              <select id="topic"></select>
-            </div>
-            <div id="categories" class="categories"></div>
-            <button id="show-category" type="button" class="text-button" aria-controls="category-form" aria-expanded="false">＋ 添加分类</button>
-            <form id="category-form" class="category-form" hidden>
-              <label>分类名<input id="category-name" maxlength="30" required></label>
-              <label>筛选说明<input id="category-description" maxlength="160" required></label>
-              <button type="submit" class="button primary-button">添加</button>
-              <button type="button" id="hide-category" class="button">取消</button>
-            </form>
-            <p id="category-message" class="field-message" role="status" hidden></p>
-            <div class="explanation">
-              <p class="field-label" id="explain-label">术语解释</p>
-              <div id="explain" class="segment" role="group" aria-labelledby="explain-label">
-                <button type="button" data-level="detailed">详细</button><button type="button" data-level="brief">简短</button><button type="button" data-level="off">不要</button>
-              </div>
-              <p id="explain-message" class="field-message" role="status" hidden></p>
-            </div>
-          </section>
-        </div>
-
-        <aside class="secondary">
-          <section class="card" aria-labelledby="window-title">
-            <h2 id="window-title">回溯时间</h2>
-            <div id="windows" class="window-controls" role="group" aria-labelledby="window-title">
-              <button type="button" data-window="daily">最近 24 小时</button><button type="button" data-window="weekly">最近 7 天</button>
-              <button type="button" data-window="since_last">上次之后</button><button type="button" data-window="custom">自定义</button>
-              <button type="button" data-window="all">全部历史</button><button type="button" data-window="saved-preset" hidden></button>
-            </div>
-            <form id="custom-window" hidden>
-              <label for="window-value" class="field-label">回溯时长</label>
-              <div class="custom-fields">
-                <input id="window-value" type="number" min="0" step="any" value="48" required>
-                <select id="window-unit" aria-label="时间单位"><option value="hours">小时</option><option value="days">天</option></select>
-              </div>
-            </form>
-            <p id="window-message" class="field-message" role="status" hidden></p>
-            <button type="button" id="save-default" class="text-button" disabled>保存为默认</button>
-            <p id="defaults-message" class="field-message" role="status" hidden></p>
-          </section>
-          <section class="card estimate" aria-labelledby="estimate-title">
-            <h2 id="estimate-title">处理预估</h2>
+          <section class="side-block side-grow" aria-labelledby="estimate-title">
+            <h2 id="estimate-title" class="section-title"><span class="step" aria-hidden="true">3</span>生成</h2>
             <dl class="metrics">
               <div><dt>待处理消息</dt><dd id="estimate-messages">—</dd></div>
-              <div><dt>预计调用次数</dt><dd id="estimate-batches">—</dd></div>
+              <div><dt>调用次数</dt><dd id="estimate-batches">—</dd></div>
               <div><dt>预估 Token</dt><dd id="estimate-tokens">—</dd></div>
             </dl>
-            <p id="estimate-message" class="field-message" role="status"></p>
-            <button type="button" id="run" class="button primary-button run-button" disabled>生成快报</button>
-            <div id="job" class="job" hidden>
-              <div class="job-head"><span id="job-status" role="status"></span><button type="button" id="cancel" class="text-button">取消</button></div>
-              <progress id="progress" max="1" aria-label="已开始的分析批次"></progress>
-              <a id="job-report" class="text-button" href="#reports" hidden>查看快报 →</a>
+            <div id="notices" class="notices" hidden>
+              <h3 class="notices-title">提醒 · <span id="notice-count"></span></h3>
+              <div id="notice-list"></div>
             </div>
           </section>
+
+          <div class="run-area">
+            <button type="button" id="run" class="btn btn-primary btn-block" aria-describedby="run-reason" disabled>生成快报</button>
+            <p id="run-reason" class="run-reason"></p>
+            <div id="job" class="job" hidden>
+              <div class="job-head"><span id="job-status" role="status"></span><button type="button" class="link-btn" data-cancel-job>取消</button></div>
+              <div class="bar" id="job-bar"><span></span></div>
+              <a id="job-report" class="link-btn" href="#reports" hidden>查看快报</a>
+            </div>
+          </div>
         </aside>
       </div>
     </section>
 
-    <section id="reports-view" hidden>
-      <header class="page-heading"><h1>快报</h1><p>查看已生成的快报和消息摘录。</p></header>
-      <div class="reports-layout">
-        <section class="card report-sidebar" aria-labelledby="history-title">
-          <h2 id="history-title">历史快报</h2><div id="report-list"></div>
-        </section>
-        <section class="card reader" aria-label="快报预览">
-          <div id="report-content" class="markdown" aria-live="polite"></div>
-        </section>
+    <!-- 关注点：全局设置 + 群类型管理 -->
+    <section id="view-focus" class="view" aria-labelledby="focus-title" hidden>
+      <header class="page-head">
+        <h1 id="focus-title">关注点</h1>
+        <p>告诉它你是谁，以及每类群要帮你留意什么。</p>
+      </header>
+
+      <section class="block" aria-labelledby="global-title">
+        <h2 id="global-title" class="block-title">对所有群生效</h2>
+        <div class="field">
+          <div class="field-row"><label for="profile">个人情况</label><span id="profile-status" class="save-status" role="status"></span></div>
+          <textarea id="profile" class="input" rows="3" maxlength="1000" placeholder="比如：大二计算机，会 Python，想找暑期实习，也关注高数作业。"></textarea>
+          <p class="hint">写得越具体，筛得越准。离开输入框就会自动保存。</p>
+        </div>
+        <div class="field field-inline">
+          <span id="explain-label" class="label">术语解释</span>
+          <div id="explain" class="segmented" role="group" aria-labelledby="explain-label">
+            <button type="button" data-level="detailed">详细</button><button type="button" data-level="brief">简短</button><button type="button" data-level="off">不要</button>
+          </div>
+          <span id="explain-hint" class="hint"></span>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="types-title">
+        <h2 id="types-title" class="block-title">群类型</h2>
+        <p class="hint block-hint">同一类型的群共用一套关注方向和分类。在主页给每个群选类型。</p>
+        <div class="types">
+          <div class="type-side">
+            <ul id="type-list" class="type-list" aria-label="群类型列表"></ul>
+            <button type="button" id="add-type" class="btn btn-ghost btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>新建类型</button>
+            <form id="new-type-form" class="new-type-form" hidden>
+              <label for="new-type-label" class="sr-only">新类型的名字</label>
+              <input id="new-type-label" class="input" maxlength="30" placeholder="比如：求职群" required>
+              <div class="row-actions"><button type="submit" class="btn btn-primary btn-sm">创建</button><button type="button" id="cancel-new-type" class="btn btn-sm">取消</button></div>
+            </form>
+          </div>
+
+          <div id="type-detail" class="type-detail">
+            <div class="type-head">
+              <label for="type-label" class="sr-only">类型名</label>
+              <input id="type-label" class="inline-input title-input" maxlength="30" title="点击修改类型名">
+              <button type="button" id="delete-type" class="btn btn-ghost btn-sm btn-danger"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg>删除类型</button>
+            </div>
+            <div class="field">
+              <label for="type-focus">关注方向</label>
+              <input id="type-focus" class="input" maxlength="200">
+              <p class="hint">AI 会只挑出「<span id="type-focus-echo"></span>」，忽略闲聊和刷屏。</p>
+            </div>
+            <div class="field">
+              <span class="label">在用的群</span>
+              <div id="type-users" class="chips"></div>
+            </div>
+            <div class="cat-head">
+              <h3>分类 · <span id="cat-count">0</span></h3>
+              <button type="button" id="add-category" class="btn btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>新增分类</button>
+            </div>
+            <ol id="category-list" class="category-list" aria-label="分类"></ol>
+            <p class="hint">点文字就能改，回车或点别处保存，Esc 撤销。拖动 <svg class="icon icon-inline" aria-hidden="true"><use href="#i-grip"/></svg> 或按 Alt + ↑ / ↓ 调整顺序。</p>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- 快报 -->
+    <section id="view-reports" class="view" aria-labelledby="reports-title" hidden>
+      <div class="reports">
+        <aside class="report-side">
+          <div class="report-side-head">
+            <h1 id="reports-title">快报</h1>
+            <button type="button" class="btn btn-ghost btn-icon" data-open-folder aria-label="打开报告文件夹" title="打开报告文件夹"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg></button>
+          </div>
+          <div id="report-job" class="report-job" hidden>
+            <div class="job-head"><span id="report-job-status"></span><button type="button" class="link-btn" data-cancel-job>取消</button></div>
+            <div class="bar" id="report-job-bar"><span></span></div>
+          </div>
+          <ul id="report-list" class="report-list" aria-label="历史快报"></ul>
+        </aside>
+        <article class="reader" aria-label="快报内容">
+          <header id="reader-head" class="reader-head" hidden>
+            <div class="reader-title">
+              <h2 id="reader-title"></h2>
+              <p id="reader-meta" class="hint"></p>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn btn-sm" id="copy-report"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>复制</button>
+              <button type="button" class="btn btn-sm" id="reveal-report"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>打开文件夹</button>
+            </div>
+          </header>
+          <div id="report-content" class="markdown"></div>
+        </article>
       </div>
     </section>
   </main>
-  <dialog id="settings" aria-labelledby="settings-title">
-    <form id="settings-form">
-      <div class="card-head"><h2 id="settings-title">设置</h2><button type="button" id="close-settings" class="text-button">关闭</button></div>
-      <p id="setup-note" class="field-message" hidden>先填 AI 服务，再导入群聊文件、添加群，回到主页生成快报。</p>
-      <label class="field-label" for="api-url">AI 接口地址</label><input id="api-url" type="url" required>
-      <label class="field-label" for="api-model">模型</label><input id="api-model" required>
-      <label class="field-label" for="api-key">API Key</label><input id="api-key" type="password" placeholder="地址不变时，留空保留已有密钥" autocomplete="new-password">
-      <label class="field-label" for="export-dir">导出目录</label><input id="export-dir" placeholder="留空使用桌面的 QQ 聊天记录导出目录">
-      <label class="field-label" for="report-dir">报告目录</label><input id="report-dir" placeholder="留空使用 reports">
-      <div class="settings-actions">
-        <label>今日快报（小时）<input id="daily-hours" type="number" min="0" max="100000" step="any" required></label>
-        <label>今周快报（小时）<input id="weekly-hours" type="number" min="0" max="100000" step="any" required></label>
+
+  <!-- 设置：右侧抽屉 -->
+  <dialog id="settings" class="drawer" aria-labelledby="settings-title">
+    <form id="settings-form" class="drawer-form">
+      <header class="drawer-head">
+        <h2 id="settings-title">设置</h2>
+        <button type="button" class="btn btn-ghost btn-icon" id="close-settings" aria-label="关闭设置"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="drawer-body">
+        <p id="setup-note" class="note" hidden>第一次用：先填好 AI 接口，再回到主页选群、生成快报。</p>
+
+        <fieldset>
+          <legend>AI 接口</legend>
+          <div class="field"><label for="api-url">接口地址</label><input id="api-url" class="input" type="url" required></div>
+          <div class="field"><label for="api-model">模型</label><input id="api-model" class="input" required></div>
+          <div class="field">
+            <label for="api-key">API Key</label>
+            <div class="input-group">
+              <input id="api-key" class="input" type="password" autocomplete="new-password" spellcheck="false">
+              <button type="button" class="btn btn-icon" id="toggle-key" aria-pressed="false" aria-label="显示 API Key" title="显示 / 隐藏"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg></button>
+            </div>
+            <p id="api-key-hint" class="hint"></p>
+          </div>
+          <div class="test-row">
+            <button type="button" class="btn" id="test-connection">测试连接</button>
+            <span id="test-result" class="inline-status" role="status"></span>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>目录</legend>
+          <div class="field"><label for="export-dir">导出目录</label><input id="export-dir" class="input" spellcheck="false"><p id="export-dir-hint" class="hint path-hint"></p></div>
+          <div class="field"><label for="report-dir">报告目录</label><input id="report-dir" class="input" spellcheck="false"><p id="report-dir-hint" class="hint path-hint"></p></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>快报预设</legend>
+          <div class="field-pair">
+            <label class="field">今日快报<span class="input-suffix"><input id="daily-hours" class="input" type="number" min="0" max="100000" step="any" required><span>小时</span></span></label>
+            <label class="field">今周快报<span class="input-suffix"><input id="weekly-hours" class="input" type="number" min="0" max="100000" step="any" required><span>小时</span></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>其他</legend>
+          <label class="check"><input id="save-raw" type="checkbox"><span>保留处理后的聊天原文<small class="hint">存到程序目录的 raw/ 里，方便核对</small></span></label>
+        </fieldset>
+        <p id="settings-error" class="field-error" role="alert" hidden></p>
       </div>
-      <label class="settings-check"><input id="save-raw" type="checkbox">保留处理后的聊天原文</label>
-      <p id="settings-message" class="field-message" role="status" hidden></p>
-      <div class="settings-actions"><button type="submit" class="button primary-button">保存设置</button><button type="button" class="button" id="test-connection">测试连接</button></div>
+      <footer class="drawer-foot">
+        <button type="button" class="btn" id="cancel-settings">取消</button>
+        <button type="submit" class="btn btn-primary" id="save-settings">保存设置</button>
+      </footer>
     </form>
   </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="drop-overlay" class="drop-overlay" hidden><span>松手就能导入聊天记录</span></div>
 </body>
 </html>

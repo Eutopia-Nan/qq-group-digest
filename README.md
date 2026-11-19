@@ -5,7 +5,7 @@
 > Use AI to pick out what actually matters to you from QQ group chats, and get a daily or weekly digest.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-green)
+![Version](https://img.shields.io/badge/version-2.1.0-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
 ![demo](docs/demo.svg)
@@ -39,21 +39,21 @@
 
 If you'd rather not touch the command line or JSON, use the desktop app. **No Python needed**: download, unzip, run.
 
-1. Download `qq-group-digest-v2.0.0-windows.zip` from the [Releases page](https://github.com/Eutopia-Nan/qq-group-digest/releases) and unzip it somewhere easy to find, such as `D:\qq-group-digest`. Avoid `C:\Program Files`, where normal programs can't write files.
+1. Download `qq-group-digest-v2.1.0-windows.zip` from the [Releases page](https://github.com/Eutopia-Nan/qq-group-digest/releases) and unzip it somewhere easy to find, such as `D:\qq-group-digest`. Avoid `C:\Program Files`, where normal programs can't write files.
 2. Double-click `qq-group-digest.exe`. The app isn't code-signed, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 3. On first launch a **setup** dialog opens. Enter the AI endpoint, model and API key, and click **Test connection** if you like. Set the export folder to where your QQ chat exports are, or leave it empty to use `QQ聊天记录导出` on the desktop.
-4. Export your group chats (see [Step 2](#step-2-export-chat-records)), then click **Import CSV / TXT** on the home page or drag the files in. New groups found in the export folder are listed under "discovered exports"; click **+ Add**.
+4. Export your group chats (see [Step 2](#step-2-export-chat-records)), then click **Import** on the home page or drag the files onto the window. New groups found in the export folder appear in the group list marked "新发现" (new); tick one to add it.
 
-Everyday changes happen right on the home page, with no settings page involved:
+Everyday changes never need the settings drawer:
 
-| To change | On the home page |
+| To change | Where |
 |---|---|
-| Which groups to process | Tick or untick; **+ Add** a new group; **Remove** one you don't need |
-| A group's type | The drop-down next to the group. It saves immediately. |
-| What to focus on | The "my focus" card: your profile, category tags (× to delete, + to add), and how much jargon to explain |
-| How far back to look | Last 24 hours / last 7 days / since last run / custom / entire history |
+| Which groups to process | Tick or untick groups on the home page. Ticking a newly found group adds it; **⋯ → remove** drops one you don't need |
+| A group's type | The drop-down at the right of each group on the home page. It saves immediately. |
+| What to focus on | The **关注点** (focus) tab: your profile and how much jargon to explain; for each group type, its focus and categories (click to edit in place, drag to reorder). You can also create, rename and delete group types there. |
+| How far back to look | Right-hand panel on the home page: since last run / 24 hours / 7 days / all / custom |
 
-Click **Save as default** to restore the same groups and time range next time. The estimate panel shows the message count, number of AI calls and tokens. Click **Generate digest** to run; you can cancel while it runs. Read the results on the **Digests** page at the top.
+Click **Save as default** to restore the same groups and time range next time. The right-hand panel shows the message count, number of AI calls, tokens and any warnings. Click **Generate digest** (or press Ctrl + Enter) to run; you can cancel while it runs. Read the results on the **Digests** page at the top, where you can copy a digest or open its folder.
 
 **Where your files live**: `config.json` and `state.json` are stored next to the exe. Digests go to a `reports\` folder next to the exe **by default**; if you changed the report folder in settings, or gave a preset its own folder in `presets`, they are saved there instead. To upgrade, copy `config.json`, `state.json` and `reports\` (if present) into the new version's folder. Report folders outside the exe folder can stay where they are; the new version keeps using them. A `config.json` from the command-line version works as-is.
 
@@ -203,6 +203,7 @@ All settings live in `config.json`.
 | `open_report` | Open the report automatically when done | `true` |
 | `save_raw` | Keep a plaintext copy during normal runs. A dry run always saves a preview. | `false` |
 | `ui_defaults` | Groups and time range the GUI pre-selects, written by its "save as default" button. The command line ignores it. | all groups, since last run |
+| `ui_theme` | GUI appearance: `light`, `sepia` or `dark`, switched with the button left of "设置" (settings) in the top bar. The command line ignores it. | follows the system |
 
 Built-in topics and presets accept field-level overrides. **Your categories are the full list**: whatever you put in `categories` is used as-is, and the built-in categories are no longer merged back in, so deleting a line really deletes that category. If you omit `categories`, the built-in ones are used. `{}` leaves only the automatic "其他有用" (other useful) category.
 
@@ -223,6 +224,8 @@ Add an entry next to the existing ones in `topics`:
 }
 ```
 Then set a group's `type` to `"job"`. A catch-all "其他有用" (other useful) category is added automatically. Unknown types are caught before any paid API call.
+
+In the desktop app you don't need to edit JSON: click **新建类型** (new type) on the focus tab. The app picks the type key for you (an English name is used as-is, other names become `custom_1`, `custom_2`, …). Deleting the built-in `study` or `opensource` type writes a `{"removed": true}` marker under `topics`; a type that groups still use can't be deleted. After deleting `opensource`, pass `--type` together with `--file` on the command line.
 
 ### Other models
 Set `base_url`, `model` and `api_key` for the service you are using. For local Ollama, use `"base_url": "http://localhost:11434/v1"`, a model you have downloaded, and an empty key. If your endpoint does not support `response_format`, set `"json_mode": false` under `deepseek`.

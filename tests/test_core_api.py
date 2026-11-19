@@ -161,6 +161,120 @@ class FourOperations(CoreTestCase):
         self.assert_unchanged_after(lambda: core.set_preset_hours(None, "monthly", 24))
 
 
+
+class TopicManagement(CoreTestCase):
+    """关注点页：群类型的新建、改名、删除，以及分类的改名、改说明、排序。"""
+
+    def assert_unchanged_after(self, error_fn, error=core.DigestError):
+        before = self.config.read_bytes()
+        with self.assertRaises(error):
+            error_fn()
+        self.assertEqual(self.config.read_bytes(), before, "出错时不能改动 config.json")
+
+    def categories(self, gtype="study"):
+        return list(core.get_topics(core.load_config())[gtype]["categories"].items())
+
+    def test_rename_category_keeps_position_and_description(self):
+        before = self.categories()
+        core.update_category(None, "study", "学习资料", new_name="资料")
+        after = self.categories()
+        self.assertEqual(after[2], ("资料", before[2][1]))
+        self.assertEqual([k for k, _ in after[:2]], [k for k, _ in before[:2]])
+
+    def test_change_description_and_order(self):
+        core.update_category(None, "study", "竞赛与加分", description="  只要竞赛  ", order=0)
+        self.assertEqual(self.categories()[0], ("竞赛与加分", "只要竞赛"))
+        core.update_category(None, "study", "竞赛与加分", order=99)
+        self.assertEqual(self.categories()[-1][0], "竞赛与加分")
+        prompt = core.build_system_prompt(core.load_config(), "study")
+        self.assertLess(prompt.index("考试与作业通知"), prompt.index("竞赛与加分"))
+
+    def test_update_category_rejects_bad_input_without_touching_file(self):
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料"))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "没有", description="x"))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", new_name="  "))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", new_name="其他有用"))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", order=-1))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", order=True))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", description=3))
+        self.assert_unchanged_after(lambda: core.update_category(None, "study", "学习资料", new_name="竞赛与加分"),
+                                    core.ConflictError)
+
+    def test_add_topic_generates_keys(self):
+        cfg, key = core.add_topic(None, "求职群", "实习和校招信息")
+        self.assertEqual(key, "custom_1")
+        self.assertEqual(cfg["topics"]["custom_1"], {"label": "求职群", "focus": "实习和校招信息", "categories": {}})
+        _, key = core.add_topic(None, "Jobs")
+        self.assertEqual(key, "jobs")
+        self.assertEqual(core.get_topics(core.load_config())["jobs"]["focus"], core.NEW_TOPIC_FOCUS)
+        _, key = core.add_topic(None, "另一个", key="mine")
+        self.assertEqual(key, "mine")
+        core.add_group(None, "456", "求职交流", "custom_1")
+
+    def test_add_topic_rejects_bad_input_without_touching_file(self):
+        self.assert_unchanged_after(lambda: core.add_topic(None, "  "))
+        self.assert_unchanged_after(lambda: core.add_topic(None, "x" * 31))
+        self.assert_unchanged_after(lambda: core.add_topic(None, "新类型", focus=""))
+        self.assert_unchanged_after(lambda: core.add_topic(None, "新类型", key="带空格 的键"))
+        self.assert_unchanged_after(lambda: core.add_topic(None, "学习群"), core.ConflictError)
+        self.assert_unchanged_after(lambda: core.add_topic(None, "新类型", key="study"), core.ConflictError)
+
+    def test_update_topic(self):
+        core.update_topic(None, "study", label="期末冲刺群", focus="考试相关")
+        topic = core.get_topics(core.load_config())["study"]
+        self.assertEqual((topic["label"], topic["focus"]), ("期末冲刺群", "考试相关"))
+        self.assertIn("考试与作业通知", topic["categories"], "改名时不能丢掉内置分类")
+        self.assertIn("「期末冲刺群」", core.build_system_prompt(core.load_config(), "study"))
+        core.update_topic(None, "study", label="期末冲刺群")  # 和自己同名不算冲突
+        self.assert_unchanged_after(lambda: core.update_topic(None, "study"))
+        self.assert_unchanged_after(lambda: core.update_topic(None, "study", focus=" "))
+        self.assert_unchanged_after(lambda: core.update_topic(None, "nope", label="x"))
+        self.assert_unchanged_after(lambda: core.update_topic(None, "study", label="技术/开源社区群"),
+                                    core.ConflictError)
+
+    def test_remove_topic_in_use_is_conflict(self):
+        self.assert_unchanged_after(lambda: core.remove_topic(None, "study"), core.ConflictError)
+        with self.assertRaisesRegex(core.ConflictError, "学习群"):
+            core.remove_topic(None, "study")
+        self.assert_unchanged_after(lambda: core.remove_topic(None, "nope"))
+
+    def test_remove_builtin_topic_stays_removed(self):
+        core.remove_topic(None, "opensource")
+        self.assertEqual(self.read_config()["topics"]["opensource"], {"removed": True})
+        cfg = core.load_config()
+        self.assertNotIn("opensource", core.get_topics(cfg))
+        self.assertFalse([i for i in core.validate_config(cfg) if i["level"] == "error"])
+        self.assert_unchanged_after(lambda: core.add_group(None, "456", "x", "opensource"))
+        self.assert_unchanged_after(lambda: core.update_topic(None, "opensource", label="x"))
+        # 自动生成的键不会复用已删除的内置键
+        _, key = core.add_topic(None, "opensource")
+        self.assertEqual(key, "custom_1")
+
+    def test_remove_custom_topic_and_keep_last_one(self):
+        _, key = core.add_topic(None, "求职群")
+        core.remove_topic(None, key)
+        self.assertNotIn(key, self.read_config()["topics"])
+        core.remove_topic(None, "opensource")
+        core.remove_group(None, "123")
+        self.assert_unchanged_after(lambda: core.remove_topic(None, "study"))
+
+    def test_removed_builtin_topic_can_be_recreated_by_set_category(self):
+        core.remove_topic(None, "opensource")
+        core.set_category(None, "opensource", "新分类", "说明")
+        topic = core.get_topics(core.load_config())["opensource"]
+        self.assertEqual(topic["categories"], {"新分类": "说明"})
+        self.assertEqual(topic["label"], "技术/开源社区群")
+
+    def test_writes_keep_other_fields_and_chinese(self):
+        cfg = self.read_config()
+        cfg["my_note"] = "自己写的字段"
+        self.write_config(cfg)
+        core.add_topic(None, "求职群")
+        text = self.config.read_text(encoding="utf-8")
+        self.assertIn("求职群", text)
+        self.assertIn("自己写的字段", text)
+
+
 class ConfigValidation(CoreTestCase):
     def test_errors_and_warnings(self):
         issues = core.validate_config({"groups": [{"id": 1, "name": "x", "type": "nope"}], "open_report": "yes"})
@@ -210,6 +324,20 @@ class PlanAndRun(CoreTestCase):
         self.assertFalse(self.calls, "plan 不能调用 AI")
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["config.json", "exports"])
 
+    def test_plan_gives_structured_notices(self):
+        cfg = core.load_config()
+        result = core.plan(cfg, None, {"mode": "hours", "hours": 0.25})
+        notice = result["sources"][0]["notices"][0]
+        self.assertEqual((notice["level"], notice["code"]), ("warn", "stale_export"))
+        self.assertIn("2027-01-01 11:30", notice["detail"])
+        self.assertEqual(len(result["sources"][0]["warnings"]), 1, "原来的 warnings 字符串保持不变")
+        with (self.exports / "群_123_学习群.csv").open("a", encoding="utf-8", newline="") as stream:
+            stream.write("坏时间,甲,内容\n")
+        notices = core.plan(cfg, None, {"mode": "hours", "hours": 24})["sources"][0]["notices"]
+        bad = next(n for n in notices if n["code"] == "bad_lines")
+        self.assertIn("跳过了 1 处", bad["message"])
+        self.assertIn("第 5 行", bad["detail"])
+
     def test_plan_rejects_bad_window(self):
         cfg = core.load_config()
         for spec in ({"mode": "hours", "hours": 0}, {"mode": "preset"}, {"mode": "weird"}):
@@ -252,6 +380,14 @@ class Reports(CoreTestCase):
         reports = core.list_reports(cfg)
         self.assertEqual([r["title"] for r in reports], ["今日快报 2027-01-01"])
         self.assertIn("内容", core.read_report(cfg, reports[0]["path"]))
+        self.assertEqual((reports[0]["groups"], reports[0]["period"]), ([], ""))
+        (folder / "今日快报_b.md").write_text(
+            "# 今日快报 2027-01-02\n\n## 学习群\n*2027-01-01 08:00:00 ~ 2027-01-02 08:00:00，共 3 条消息*\n\n"
+            "### 学习资料\n\n---\n\n## 技术群\n*2027-01-01 08:00:00 ~ 2027-01-02 08:00:00，共 1 条消息*\n\n"
+            "---\n\n## 未生成快报的来源\n\n- 坏群：出错了", encoding="utf-8")
+        entry = next(r for r in core.list_reports(cfg) if r["name"] == "今日快报_b.md")
+        self.assertEqual(entry["groups"], ["学习群", "技术群"])
+        self.assertEqual(entry["period"], "2027-01-01 08:00:00 ~ 2027-01-02 08:00:00")
         secret = self.root / "secret.md"
         secret.write_text("x", encoding="utf-8")
         for path in (secret, folder / ".." / ".." / "secret.md", self.config):

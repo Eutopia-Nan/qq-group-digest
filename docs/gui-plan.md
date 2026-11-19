@@ -27,7 +27,7 @@
 |---|---|---|
 | 1. 修改指定群聊 | 群列表打勾选择；导出目录里发现未配置的群时显示"➕ 添加"；每个群可以"移除" | `add_group` / `remove_group`；本次勾选通过 `selection` 传入 |
 | 2. 修改 type | 每个群旁边的下拉框，改完自动保存 | `set_group_type` |
-| 3. 修改聚焦的信息 | "我的关注点"卡片：个人情况文本框；当前类型的分类标签（× 删除，＋ 添加）；解释程度三档开关（详细 / 简短 / 不要） | `set_profile` / `set_category` / `remove_category` / `set_explain_level` |
+| 3. 修改聚焦的信息 | 顶栏的"关注点"页（点一下进入）：个人情况文本框；解释程度三档开关；群类型列表（新建 / 改名 / 删除 / 关注方向）；每个类型的分类列表（就地改名、改说明、增删、拖动排序） | `set_profile` / `set_explain_level` / `set_category` / `update_category` / `remove_category` / `add_topic` / `update_topic` / `remove_topic` |
 | 4. 回溯时间 | 按钮组：今天 / 本周 / 上次之后 / 自定义（N 天或 N 小时） | `plan` / `run` 的 `window` 参数 |
 
 - **本次选择和长期配置分开**：勾选群、选时间范围只影响这一次运行；点"保存为默认"才会写入配置的 `ui_defaults`（见第 4.1 节），下次打开界面时自动恢复这组勾选和时间范围
@@ -50,7 +50,7 @@ docs/gui-plan.md      # 本文
 ```
 
 ## 4. 核心接口约定（digest_core.py）
-核心代码**不得**直接 print、input 或 sys.exit。出错时抛 `DigestError`，错误信息写成用户能看懂的中文；进度通过回调报告。
+核心代码**不得**直接 print、input 或 sys.exit。出错时抛 `DigestError`（和现有数据冲突时抛它的子类 `ConflictError`，接口返回 409），错误信息写成用户能看懂的中文；进度通过回调报告。
 
 ```python
 load_config(path=None) -> dict                 # 读取并校验，错误信息含行号
@@ -63,7 +63,14 @@ remove_group(cfg_path, group_id) -> dict
 set_group_type(cfg_path, group_id, type) -> dict          # type 必须已存在，否则抛 DigestError
 set_profile(cfg_path, text) -> dict
 set_category(cfg_path, type, name, description) -> dict   # 新增或修改分类；type 不存在时自动新建类型
+update_category(cfg_path, type, name, new_name=None, description=None, order=None) -> dict
+#   改名（保持原位置）/ 改说明 / 调整顺序（order 从 0 开始）；新名字重复时抛 ConflictError
 remove_category(cfg_path, type, name) -> dict
+add_topic(cfg_path, label, focus=None, key=None) -> (dict, key)
+#   新建群类型；不给 key 时：英文 label 直接作键，否则 custom_1、custom_2……（不复用已删除的键）；label 重复抛 ConflictError
+update_topic(cfg_path, type, label=None, focus=None) -> dict   # 只改显示名和关注方向，键不变
+remove_topic(cfg_path, type) -> dict
+#   还有群在用时抛 ConflictError；至少保留一个类型；内置类型写成 topics.<键> = {"removed": true}，get_topics 跳过它
 set_explain_level(cfg_path, level) -> dict                # "detailed" | "brief" | "off"，对应 explain_style 的三种预设文字
 set_preset_hours(cfg_path, preset, hours) -> dict
 
@@ -75,7 +82,7 @@ plan(cfg, selection, window) -> Plan           # 相当于 dry-run，不调用 A
 #   selection = [source key, ...]
 #   window    = {"mode": "since_last"} | {"mode": "hours", "hours": 24} | {"mode": "all"}
 #             | {"mode": "preset", "name": "daily"}
-#   Plan = {sources: [{key, name, in_window, pending, chars, batches, warnings}], total_batches, est_tokens}
+#   Plan = {sources: [{key, name, in_window, pending, chars, batches, warnings, notices}], total_batches, est_tokens}
 
 run(cfg, plan, on_progress, cancel) -> RunResult
 #   on_progress(event)  event = {stage, source_key, batch, total_batches, message}
@@ -83,7 +90,7 @@ run(cfg, plan, on_progress, cancel) -> RunResult
 #   RunResult = {report_path, sources: [{key, status, items, error}], failures}
 
 test_connection(cfg) -> {ok, model, message}   # 用最小请求验证 Key、模型和余额
-list_reports(cfg) -> list[{id, path, name, dir, title, created, size}]
+list_reports(cfg) -> list[{id, path, name, dir, title, created, size, groups, period}]
 read_report(path) -> str                       # 只允许读取配置的报告目录内的文件
 ```
 
@@ -126,7 +133,11 @@ set_defaults(cfg_path, selection, window) -> dict   # 同样"读取 → 修改 �
 | PUT | `/api/defaults` | `{selection, window}`，保存主页的默认勾选和时间范围（第 4.1 节）；返回和 `GET /api/config` 相同的视图 |
 | POST | `/api/groups` · DELETE `/api/groups/{id}` · PATCH `/api/groups/{id}` | 添加 / 移除群；修改类型（对应四项操作 1、2） |
 | PUT | `/api/focus` | `{profile?, explain_level?}`（对应操作 3） |
+| PUT | `/api/theme` | `{theme}`，`light` / `sepia` / `dark`，写入 `ui_theme`（命令行不读）；返回配置视图 |
 | PUT · DELETE | `/api/topics/{type}/categories/{name}` | 新增或修改 / 删除分类（对应操作 3） |
+| PATCH | `/api/topics/{type}/categories/{name}` | `{name?, description?, order?}`：改名、改说明、调整顺序；重名返回 409（`field: "name"`） |
+| POST | `/api/topics` | `{label, focus?, key?}` 新建群类型，返回配置视图并多带一个 `key`；重名返回 409 |
+| PATCH · DELETE | `/api/topics/{type}` | 改 `{label?, focus?}` / 删除群类型；还有群在用时 DELETE 返回 409（`field: "groups"`） |
 | POST | `/api/config/validate` | 只校验不保存 |
 | POST | `/api/test-connection` | 测试 AI 连接 |
 | GET | `/api/sources` | 扫描导出目录 |
@@ -136,13 +147,17 @@ set_defaults(cfg_path, selection, window) -> dict   # 同样"读取 → 修改 �
 | POST | `/api/jobs/{id}/cancel` | 取消任务 |
 | GET | `/api/reports` | 历史报告列表，每条带 `id`（由完整路径算出，不同文件夹里的同名快报 id 不同） |
 | GET | `/api/reports/{id}` | 报告原文（Markdown）。界面一律用 `id` 打开；按文件名打开只在名字唯一时可用，重名时返回 409 |
+| POST | `/api/reports/open-folder` | `{id?}`：用系统文件管理器打开这份快报所在的文件夹；不带 id 时打开默认报告目录。只能打开报告目录 |
 | POST | `/api/import` | 拖入文件：复制到导出目录。已有同名文件时返回 409（`field: "overwrite"`），用户确认替换后带 `?overwrite=1` 重新上传 |
 
 **`GET /api/config` 的返回格式**（`PUT /api/config`、`PUT /api/defaults` 和各项操作接口也返回这个格式）：
 ```
 {config: 打码后的完整配置, issues: [Issue], topics: 合并后的类型和分类,
- explain_level, presets: 合并后的预设, defaults: get_defaults() 的结果}
+ explain_level, presets: 合并后的预设, defaults: get_defaults() 的结果,
+ paths: {export_dir, report_dir, default_export_dir, default_report_dir}}   # paths：当前生效的目录和留空时的默认目录
 ```
+
+`plan()` 的每个来源除了原有的 `warnings`（字符串），还带 `notices: [{level, code, message, detail}]`，`code` 为 `stale_export`（最新消息早于筛选起点）、`bad_lines`（跳过了无效行，行号在 `detail`）或 `other`。`list_reports()` 每条多带 `groups`（报告里各群的名字）和 `period`（时间范围），从报告前 64KB 解析。
 
 **完整配置的保护**：`PUT /api/config` 是整体替换，为防止只发了一部分字段就把配置清空：
 1. 请求体必须是对象，且必须包含 `deepseek`、`profile` 和 `groups` 这三项（值可以为空，比如 `"groups": []`，但不能缺少），否则返回 400，配置不改
