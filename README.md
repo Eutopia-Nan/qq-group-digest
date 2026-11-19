@@ -5,7 +5,7 @@
 > Use AI to pick out what actually matters to you from QQ group chats, and get a daily or weekly digest.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-green)
+![Version](https://img.shields.io/badge/version-2.1.0-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
 ![demo](docs/demo.svg)
@@ -39,7 +39,7 @@
 
 If you'd rather not touch the command line or JSON, use the desktop app. **No Python needed**: download, unzip, run.
 
-1. Download `qq-group-digest-v2.0.0-windows.zip` from the [Releases page](https://github.com/Eutopia-Nan/qq-group-digest/releases) and unzip it somewhere easy to find, such as `D:\qq-group-digest`. Avoid `C:\Program Files`, where normal programs can't write files.
+1. Download `qq-group-digest-v2.1.0-windows.zip` from the [Releases page](https://github.com/Eutopia-Nan/qq-group-digest/releases) and unzip it somewhere easy to find, such as `D:\qq-group-digest`. Avoid `C:\Program Files`, where normal programs can't write files.
 2. Double-click `qq-group-digest.exe`. The app isn't code-signed, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 3. On first launch a **setup** dialog opens. Enter the AI endpoint, model and API key, and click **Test connection** if you like. Set the export folder to where your QQ chat exports are, or leave it empty to use `QQ聊天记录导出` on the desktop.
 4. Export your group chats (see [Step 2](#step-2-export-chat-records)), then click **Import** on the home page or drag the files onto the window. New groups found in the export folder appear in the group list marked "新发现" (new); tick one to add it.

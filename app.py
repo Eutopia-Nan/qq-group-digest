@@ -34,7 +34,7 @@ from pathlib import Path
 import digest_core as core
 from digest_core import DigestError
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 # 打包成 exe 后，界面文件在 PyInstaller 解包目录（sys._MEIPASS）里
 UI_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "ui"
 MAX_JSON_BYTES = 1024 * 1024

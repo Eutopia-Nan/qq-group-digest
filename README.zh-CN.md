@@ -5,7 +5,7 @@
 > 用 AI 从 QQ 群聊记录里筛出对你有用的信息，自动生成每日/每周快报。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-green)
+![Version](https://img.shields.io/badge/version-2.1.0-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
 ![demo](docs/demo.svg)
@@ -33,7 +33,7 @@
 
 不想碰命令行和 JSON，可以用图形界面版。**不需要安装 Python**，下载解压就能用。
 
-1. 到 [Releases 页面](https://github.com/Eutopia-Nan/qq-group-digest/releases) 下载 `qq-group-digest-v2.0.0-windows.zip`，解压到一个好找的位置，比如 `D:\qq-group-digest`。不要放在 `C:\Program Files` 里，那里普通程序没有写入权限。
+1. 到 [Releases 页面](https://github.com/Eutopia-Nan/qq-group-digest/releases) 下载 `qq-group-digest-v2.1.0-windows.zip`，解压到一个好找的位置，比如 `D:\qq-group-digest`。不要放在 `C:\Program Files` 里，那里普通程序没有写入权限。
 2. 双击 `qq-group-digest.exe`。程序没有数字签名，Windows 可能提示"已保护你的电脑"，点 **更多信息 → 仍要运行**。
 3. 第一次打开会弹出 **首次设置**：填写 AI 接口地址、模型和 API Key，可以先点 **测试连接**。导出目录填 QQ 聊天记录导出的文件夹，留空则使用桌面的 `QQ聊天记录导出`。
 4. 导出群聊记录（方法见[第 2 步](#第-2-步导出群聊记录)），点主页的 **导入** 或直接把文件拖进窗口。导出目录里发现的新群会出现在群列表里（标着"新发现"），勾选就会添加。
