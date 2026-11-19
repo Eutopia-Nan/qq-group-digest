@@ -5,13 +5,14 @@
 > Use AI to pick out what actually matters to you from QQ group chats, and get a daily or weekly digest.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.0.0-green)
+![Version](https://img.shields.io/badge/version-2.0.0-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB)
 
 ![demo](docs/demo.svg)
 
 ## Table of Contents
 - [Features](#features)
+- [Desktop App (Windows)](#desktop-app-windows)
 - [Two Ways to Get Started](#two-ways-to-get-started)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
@@ -33,6 +34,34 @@
 - 📦 **Zero dependencies**: Python standard library only.
 
 > The prompts and reports are in Chinese, since the tool is built for Chinese-language QQ groups.
+
+## Desktop App (Windows)
+
+If you'd rather not touch the command line or JSON, use the desktop app. **No Python needed**: download, unzip, run.
+
+1. Download `qq-group-digest-v2.0.0-windows.zip` from the [Releases page](https://github.com/Eutopia-Nan/qq-group-digest/releases) and unzip it somewhere easy to find, such as `D:\qq-group-digest`. Avoid `C:\Program Files`, where normal programs can't write files.
+2. Double-click `qq-group-digest.exe`. The app isn't code-signed, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
+3. On first launch a **setup** dialog opens. Enter the AI endpoint, model and API key, and click **Test connection** if you like. Set the export folder to where your QQ chat exports are, or leave it empty to use `QQ聊天记录导出` on the desktop.
+4. Export your group chats (see [Step 2](#step-2-export-chat-records)), then click **Import CSV / TXT** on the home page or drag the files in. New groups found in the export folder are listed under "discovered exports"; click **+ Add**.
+
+Everyday changes happen right on the home page, with no settings page involved:
+
+| To change | On the home page |
+|---|---|
+| Which groups to process | Tick or untick; **+ Add** a new group; **Remove** one you don't need |
+| A group's type | The drop-down next to the group. It saves immediately. |
+| What to focus on | The "my focus" card: your profile, category tags (× to delete, + to add), and how much jargon to explain |
+| How far back to look | Last 24 hours / last 7 days / since last run / custom / entire history |
+
+Click **Save as default** to restore the same groups and time range next time. The estimate panel shows the message count, number of AI calls and tokens. Click **Generate digest** to run; you can cancel while it runs. Read the results on the **Digests** page at the top.
+
+**Where your files live**: `config.json` and `state.json` are stored next to the exe. Digests go to a `reports\` folder next to the exe **by default**; if you changed the report folder in settings, or gave a preset its own folder in `presets`, they are saved there instead. To upgrade, copy `config.json`, `state.json` and `reports\` (if present) into the new version's folder. Report folders outside the exe folder can stay where they are; the new version keeps using them. A `config.json` from the command-line version works as-is.
+
+**No separate window?** The window uses Microsoft WebView2, which Windows 10/11 usually already has. Without it, the app opens in your browser and shows a small dialog; click OK in that dialog when you're done to quit. To get the separate window, install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+**Running the interface from source**: double-click `启动界面.bat` to open the same interface in your browser (needs Python, no extra packages). With `pip install pywebview`, `python desktop.py` opens it in a separate window.
+
+> The interface is in Chinese, like the prompts and reports.
 
 ## Two Ways to Get Started
 
@@ -212,6 +241,11 @@ CSV supports comma, semicolon and Tab delimiters. Timestamps can be local date-t
 ```
 ├── digest.py                 # command-line entry (argument parsing, progress output)
 ├── digest_core.py            # core logic: reading, filtering, AI calls, reports
+├── app.py                    # local server behind the desktop app (localhost only)
+├── desktop.py                # desktop app entry: separate window, browser fallback
+├── ui/                       # web files for the desktop app
+├── 启动界面.bat               # open the interface from source (Windows)
+├── build/build_exe.py        # builds the exe (for developers)
 ├── config.example.json       # config template (copy to config.json)
 ├── 1_今日快报_24小时.bat      # daily digest launcher (Windows)
 ├── 2_今周快报_一周.bat        # weekly digest launcher (Windows)
